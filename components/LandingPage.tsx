@@ -1,21 +1,27 @@
 'use client'
 
+import { useVenue } from '@/hooks/useVenue'
+
 interface LandingPageProps {
   onJoinClick: () => void
+  venueId?: string
 }
 
-export default function LandingPage({ onJoinClick }: LandingPageProps) {
+export default function LandingPage({ onJoinClick, venueId }: LandingPageProps) {
+  const venue = useVenue(venueId)
+  
   return (
-    <div className="min-h-screen bg-[#EDE8E3] flex flex-col items-center justify-center p-6 sm:p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 sm:p-8" style={{ backgroundColor: venue.colors.background }}>
       <div className="flex flex-col items-center justify-center max-w-md w-full text-center space-y-8">
         {/* Coffee Icon */}
-        <div className="w-20 h-20 bg-[#3D2817] rounded-2xl flex items-center justify-center shadow-lg">
+        <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: venue.colors.primary }}>
           <svg 
-            className="w-10 h-10 text-[#D4A574]" 
+            className="w-10 h-10" 
             fill="none" 
             stroke="currentColor" 
             viewBox="0 0 24 24"
             strokeWidth="2"
+            style={{ color: venue.colors.accent }}
           >
             <path 
               strokeLinecap="round" 
@@ -27,26 +33,29 @@ export default function LandingPage({ onJoinClick }: LandingPageProps) {
 
         {/* Title Section */}
         <div className="space-y-3">
-          <p className="text-[#D4A574] text-sm font-medium tracking-[0.2em] uppercase">
+          <p className="text-sm font-medium tracking-[0.2em] uppercase" style={{ color: venue.colors.accent }}>
             TAP & EARN
           </p>
-          <h1 className="text-5xl sm:text-6xl font-serif text-[#2C1810] leading-tight">
+          <h1 className="text-5xl sm:text-6xl font-serif leading-tight" style={{ color: venue.colors.text }}>
             Your Coffee
           </h1>
-          <h2 className="text-5xl sm:text-6xl font-serif italic text-[#2C1810]">
+          <h2 className="text-5xl sm:text-6xl font-serif italic" style={{ color: venue.colors.text }}>
             Rewards
           </h2>
         </div>
 
         {/* Description */}
-        <p className="text-[#6B5D54] text-base leading-relaxed max-w-sm">
-          Join the exclusive circle of coffee lovers at Backstreet Cafe.
+        <p className="text-base leading-relaxed max-w-sm" style={{ color: venue.colors.textLight }}>
+          {venue.description}
         </p>
 
         {/* Join Button */}
         <button
           onClick={onJoinClick}
-          className="w-full max-w-sm bg-[#3D2817] hover:bg-[#2C1810] text-white font-medium py-4 px-8 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 group"
+          className="w-full max-w-sm text-white font-medium py-4 px-8 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 group"
+          style={{ backgroundColor: venue.colors.primary }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = venue.colors.secondary}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = venue.colors.primary}
         >
           Join Now
           <svg 
@@ -60,7 +69,7 @@ export default function LandingPage({ onJoinClick }: LandingPageProps) {
         </button>
 
         {/* Footer */}
-        <p className="text-[#B5A89C] text-xs tracking-widest uppercase mt-8">
+        <p className="text-xs tracking-widest uppercase mt-8" style={{ color: venue.colors.textMuted }}>
           POWERED BY MENULOVE
         </p>
       </div>
