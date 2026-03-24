@@ -22,6 +22,7 @@ export const venues: Record<string, VenueConfig> = {
     name: 'Backstreet Cafe',
     brand: 'Backstreet Coffee Club',
     description: 'Join the exclusive circle of coffee lovers at Backstreet Cafe.',
+    logo: 'https://your-supabase-url.supabase.co/storage/v1/object/public/media/logo.png', // URL da logo
     colors: {
       primary: '#3D2817',      // Marrom escuro (botões, ícones)
       secondary: '#2C1810',    // Marrom mais escuro (hover)
@@ -87,6 +88,42 @@ export function getVenueFromHostname(hostname: string): VenueConfig {
 - Edite `/etc/hosts` (Mac/Linux) ou `C:\Windows\System32\drivers\etc\hosts` (Windows)
 - Adicione: `127.0.0.1 novocafe.local`
 - Acesse: `http://novocafe.local:3000`
+
+## 🖼️ Adicionando Logo do Coffee Shop
+
+### Upload da Logo no Supabase
+
+1. **Acesse o Supabase Storage:**
+   - Vá em https://nuwmbaohgwuanvzotbef.supabase.co
+   - Clique em **Storage** no menu lateral
+   - Selecione o bucket **media** (ou crie um se não existir)
+
+2. **Faça Upload da Logo:**
+   - Clique em **Upload file**
+   - Selecione a logo do coffee shop (PNG ou JPG recomendado)
+   - Nome sugerido: `logo-nome-do-cafe.png`
+
+3. **Copie a URL Pública:**
+   - Clique na imagem enviada
+   - Clique em **Get URL** ou **Copy URL**
+   - Cole essa URL no campo `logo` da configuração do venue
+
+4. **Adicione na Configuração:**
+```typescript
+'seu-cafe': {
+  id: 'seu-cafe',
+  name: 'Seu Cafe',
+  brand: 'Seu Cafe Loyalty',
+  logo: 'https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/seu-logo.png',
+  // ... resto da config
+}
+```
+
+**Dicas para Logo:**
+- Tamanho recomendado: 200x200px a 400x400px
+- Formato: PNG com fundo transparente (ideal) ou JPG
+- Logo deve ser quadrada ou circular
+- Cores devem contrastar com o background do app
 
 ## 🎨 Escolhendo Cores
 

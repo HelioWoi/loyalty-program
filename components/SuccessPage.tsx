@@ -20,15 +20,14 @@ export default function SuccessPage({ onDone, venueId }: SuccessPageProps) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 sm:p-8" style={{ backgroundColor: venue.colors.background }}>
       <div className="flex flex-col items-center justify-center max-w-md w-full text-center space-y-8">
-        {/* Success Icon */}
-        <div className="w-24 h-24 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: venue.colors.primary }}>
+        {/* Success Icon - Green Checkmark */}
+        <div className="w-24 h-24 rounded-full flex items-center justify-center shadow-lg bg-green-500">
           <svg
-            className="w-14 h-14"
+            className="w-14 h-14 text-white"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            strokeWidth="2.5"
-            style={{ color: venue.colors.accent }}
+            strokeWidth="3"
           >
             <path
               strokeLinecap="round"
@@ -65,8 +64,8 @@ export default function SuccessPage({ onDone, venueId }: SuccessPageProps) {
         </button>
 
         {/* Footer */}
-        <p className="text-xs tracking-widest uppercase mt-8" style={{ color: venue.colors.textMuted }}>
-          POWERED BY MENULOVE
+        <p className="text-xs tracking-wide mt-8" style={{ color: venue.colors.textMuted }}>
+          Powered by MenuLove™
         </p>
       </div>
     </div>

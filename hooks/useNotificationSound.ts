@@ -4,19 +4,65 @@ export function useNotificationSound() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    // Create audio element with a simple notification sound using Web Audio API
-    audioRef.current = new Audio()
+    // Create a positive success sound using Web Audio API
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
     
-    // Create a simple bell sound using data URI
-    const bellSound = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGe77OWfTRAMUKbj8LZjHAU5kdfy0HotBSJ1xe/glEILElyx6OyrWBUIQ5zd8sFuJAUuhM/z3I4+CRZks+vmnlARDFCm4/C2YxwFOJHX8tB6LQUidb/v4JRCCxJcr+jrq1gVCEKb3PLBbiQFLoTP89yOPgkWY7Lr5p5QEQxPpuPwtmMcBTiR1/LQei0FInW+7+CUQgsSXK7o66tYFQhCmtzyv24kBS6Ez/PcjT4JFmKy6+aeUBEMT6bj8LZjHAU4kdfyz3otBSJ1vu/glEILElyu6OurWBUIQprc8r9uJAUug8/z3I0+CRZhsurlnlARDE+m4/C2YhwFOJHX8s96LQUidb7v4JRCCxJcrujrq1gVCEKa3PK/biQFLoPP89yNPgkWYbLq5Z5QEQxPpuPwtmIcBTiR1/LPei0FInW+7+CUQgsSXK7o66tYFQhCmtzyv24kBS6Dz/PcjT4JFmGy6uWeUBEMT6bj8LZiHAU4kdfyz3otBSJ1vu/glEILElyu6OurWBUIQprc8r9uJAUug8/z3I0+CRZhsurlnlARDE+m4/C2YhwFOJHX8s96LQUidb7v4JRCCxJcrujrq1gVCEKa3PK/biQFLoPP89yNPgkWYbLq5Z5QEQxPpuPwtmIcBTiR1/LPei0FInW+7+CUQgsSXK7o66tYFQhCmtzyv24kBS6Dz/PcjT4JFmGy6uWeUBEMT6bj8LZiHAU4kdfyz3otBSJ1vu/glEILElyu6OurWBUIQprc8r9uJAUug8/z3I0+CRZhsurlnlARDE+m4/C2YhwFOJHX8s96LQUidb7v4JRCCxJcrujrq1gVCEKa3PK/biQFLoPP89yNPgkWYbLq5Z5QEQxPpuPwtmIcBTiR1/LPei0FInW+7+CUQgsSXK7o66tYFQhCmtzyv24kBS6Dz/PcjT4JFmGy6uWeUBEMT6bj8LZiHAU4kdfyz3otBSJ1vu/glEILElyu6OurWBUIQprc8r9uJAUug8/z3I0+CRZhsurlnlARDE+m4/C2YhwFOJHX8s96LQUidb7v4JRCCxJcrujrq1gVCEKa3PK/biQFLoPP89yNPgkWYbLq5Z5QEQxPpuPwtmIcBTiR1/LPei0FInW+7+CUQgsSXK7o66tYFQhCmtzyv24kBS6Dz/PcjT4JFmGy6uWeUBEMT6bj8LZiHAU4kdfyz3otBSJ1vu/glEILElyu6OurWBUIQprc8r9uJAUug8/z3I0+CRZhsurlnlARDE+m4/C2YhwFOJHX8s96LQUidb7v4Q=='
-    
-    audioRef.current.src = bellSound
-    audioRef.current.volume = 0.5
+    const createSuccessSound = () => {
+      const duration = 0.6
+      const sampleRate = audioContext.sampleRate
+      const numSamples = duration * sampleRate
+      const buffer = audioContext.createBuffer(1, numSamples, sampleRate)
+      const data = buffer.getChannelData(0)
+      
+      // Create a "Reward Chime" - pleasant three-note ascending melody (C-E-G)
+      const notes = [
+        { freq: 523.25, start: 0, duration: 0.2 },      // C5
+        { freq: 659.25, start: 0.15, duration: 0.2 },   // E5
+        { freq: 783.99, start: 0.3, duration: 0.3 }     // G5
+      ]
+      
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate
+        let sample = 0
+        
+        // Generate each note
+        for (const note of notes) {
+          if (t >= note.start && t < note.start + note.duration) {
+            const noteTime = t - note.start
+            const noteProgress = noteTime / note.duration
+            
+            // Smooth envelope (attack + decay)
+            const attack = Math.min(noteTime / 0.02, 1)
+            const decay = Math.exp(-3 * noteProgress)
+            const envelope = attack * decay
+            
+            // Pure sine wave with subtle harmonic
+            const fundamental = Math.sin(2 * Math.PI * note.freq * noteTime)
+            const harmonic = Math.sin(2 * Math.PI * note.freq * 2 * noteTime) * 0.15
+            
+            sample += (fundamental + harmonic) * envelope * 0.3
+          }
+        }
+        
+        data[i] = sample
+      }
+      
+      return buffer
+    }
+
+    audioRef.current = {
+      play: () => {
+        const source = audioContext.createBufferSource()
+        source.buffer = createSuccessSound()
+        source.connect(audioContext.destination)
+        source.start(0)
+        return Promise.resolve()
+      }
+    } as any
   }, [])
 
   const playNotification = () => {
     if (audioRef.current) {
-      audioRef.current.currentTime = 0
       audioRef.current.play().catch(err => {
         console.log('Audio play failed:', err)
       })
