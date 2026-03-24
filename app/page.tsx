@@ -17,7 +17,7 @@ export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
   const [venueId, setVenueId] = useState<string>('backstreet-cafe')
   const [qrToken, setQrToken] = useState<string | null>(null)
-  const { member, isMember, login, updateMember } = useAuth()
+  const { member, isMember, isLoading, login, updateMember } = useAuth()
 
   useEffect(() => {
     const handleQRScan = async () => {
@@ -26,6 +26,12 @@ export default function Home() {
       const hostname = window.location.hostname
       const venue = getVenueFromHostname(hostname)
       setVenueId(venue.id)
+
+      // Wait for auth to finish loading before processing QR scan
+      if (isLoading) {
+        console.log('Auth still loading, waiting...')
+        return
+      }
 
       // Handle QR code scan: ?action=checkin&token=xxx
       const params = new URLSearchParams(window.location.search)
@@ -45,11 +51,12 @@ export default function Home() {
           window.history.replaceState({}, '', window.location.pathname)
           
           if (isMember && member) {
-            // Already logged in → go to check-in page
+            // Already logged in → go directly to check-in page
+            console.log('User already logged in:', member.email)
             setCurrentScreen('checkin')
           } else {
             // Not logged in → show signup form
-            // User will either signup or we'll detect existing email and auto-login
+            console.log('User not logged in, showing signup form')
             setCurrentScreen('signup')
           }
         } else {
@@ -61,7 +68,7 @@ export default function Home() {
     }
     
     handleQRScan()
-  }, [isMember, member])
+  }, [isMember, member, isLoading])
 
   const handleBack = () => {
     setCurrentScreen(isMember ? 'checkin' : 'landing')

@@ -103,12 +103,14 @@ export default function LandingPage({ venueId }: LandingPageProps) {
             {rewards.map((reward) => (
               <div
                 key={reward.id}
-                className="rounded-xl p-2 sm:p-3 text-center shadow bg-white"
-                style={{ width: rewards.length >= 4 ? 'calc(25% - 6px)' : rewards.length === 3 ? 'calc(30% - 6px)' : rewards.length === 2 ? 'calc(40% - 6px)' : '50%' }}
+                className="rounded-xl p-3 sm:p-3 text-center shadow bg-white"
+                style={{ 
+                  width: 'calc(50% - 4px)', // Mobile: 2 columns (2x2 grid)
+                }}
               >
-                <p className="text-base sm:text-lg font-bold" style={{ color: venue.colors.accent }}>{reward.points_required}</p>
-                <p className="text-[8px] sm:text-[10px] uppercase tracking-wide font-medium" style={{ color: venue.colors.textMuted }}>Pts</p>
-                <p className="text-[10px] sm:text-xs font-medium mt-0.5 leading-tight" style={{ color: venue.colors.text }}>{reward.name}</p>
+                <p className="text-lg sm:text-lg font-bold" style={{ color: venue.colors.accent }}>{reward.points_required}</p>
+                <p className="text-[9px] sm:text-[10px] uppercase tracking-wide font-medium" style={{ color: venue.colors.textMuted }}>PTS</p>
+                <p className="text-xs sm:text-xs font-medium mt-1 leading-tight" style={{ color: venue.colors.text }}>{reward.name}</p>
               </div>
             ))}
           </div>
