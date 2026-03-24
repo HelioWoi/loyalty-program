@@ -16,6 +16,7 @@ type Screen = 'landing' | 'signup' | 'success' | 'checkin' | 'rewards'
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
   const [venueId, setVenueId] = useState<string>('backstreet-cafe')
+  const [qrToken, setQrToken] = useState<string | null>(null)
   const { member, isMember, login, updateMember } = useAuth()
 
   useEffect(() => {
@@ -24,20 +25,34 @@ export default function Home() {
       const venue = getVenueFromHostname(hostname)
       setVenueId(venue.id)
 
-      // Handle QR code scan: ?action=checkin
+      // Handle QR code scan: ?action=checkin&token=xxx
       const params = new URLSearchParams(window.location.search)
       const action = params.get('action')
+      const token = params.get('token')
       
-      if (action === 'checkin') {
-        // Clean URL without reloading
-        window.history.replaceState({}, '', window.location.pathname)
+      if (action === 'checkin' && token) {
+        // Validate token (timestamp-based: token should be current hour)
+        const currentHour = new Date().toISOString().slice(0, 13) // YYYY-MM-DDTHH
+        const validToken = btoa(currentHour + venue.id).slice(0, 16)
         
-        if (isMember && member) {
-          // Member scans QR → auto check-in
-          setCurrentScreen('checkin')
+        if (token === validToken) {
+          // Valid QR scan - store token to trigger check-in
+          setQrToken(token)
+          
+          // Clean URL without reloading
+          window.history.replaceState({}, '', window.location.pathname)
+          
+          if (isMember && member) {
+            // Member scans QR → go to check-in page
+            setCurrentScreen('checkin')
+          } else {
+            // Non-member scans QR → signup form
+            setCurrentScreen('signup')
+          }
         } else {
-          // Non-member scans QR → signup form
-          setCurrentScreen('signup')
+          // Invalid or expired token
+          alert('Invalid or expired QR code. Please scan the current QR code at the venue.')
+          window.history.replaceState({}, '', window.location.pathname)
         }
       }
     }
@@ -183,6 +198,7 @@ export default function Home() {
         <CheckInPage
           member={member}
           venueId={venueId}
+          qrToken={qrToken}
           onCheckInSuccess={handleCheckInSuccess}
           onViewRewards={handleViewRewards}
         />

@@ -10,11 +10,12 @@ import { fetchCampaign, fetchRewards, checkAndUnlockRewards, LoyaltyCampaign, Lo
 interface CheckInPageProps {
   member: MemberData
   venueId?: string
+  qrToken: string | null
   onCheckInSuccess: (updatedMember: MemberData) => void
   onViewRewards: () => void
 }
 
-export default function CheckInPage({ member, venueId, onCheckInSuccess, onViewRewards }: CheckInPageProps) {
+export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess, onViewRewards }: CheckInPageProps) {
   const venue = useVenue(venueId)
   const { playNotification } = useNotificationSound()
   const [isCheckingIn, setIsCheckingIn] = useState(false)
@@ -26,9 +27,11 @@ export default function CheckInPage({ member, venueId, onCheckInSuccess, onViewR
   const [rewards, setRewards] = useState<LoyaltyReward[]>([])
   const [memberRewards, setMemberRewards] = useState<RewardWithStatus[]>([])
 
-  // Fetch fresh data and auto check-in on mount
+  // Fetch fresh data and check-in ONLY if valid QR token exists
   useEffect(() => {
-    const initAndCheckIn = async () => {
+    const initData = async () => {
+      let freshMember = member
+      
       const { data, error } = await supabase
         .from('coffee_club_members')
         .select('*')
@@ -36,7 +39,7 @@ export default function CheckInPage({ member, venueId, onCheckInSuccess, onViewR
         .single()
 
       if (!error && data) {
-        const fresh: MemberData = {
+        freshMember = {
           id: data.id,
           email: data.email,
           full_name: data.full_name,
@@ -44,8 +47,8 @@ export default function CheckInPage({ member, venueId, onCheckInSuccess, onViewR
           reward_status: data.reward_status || 'new',
           points: data.points || 0,
         }
-        setLiveMember(fresh)
-        console.log('Fresh member data:', fresh)
+        setLiveMember(freshMember)
+        console.log('Fresh member data:', freshMember)
       }
 
       // Load campaign + rewards
@@ -54,88 +57,91 @@ export default function CheckInPage({ member, venueId, onCheckInSuccess, onViewR
       const rews = await fetchRewards(camp.id)
       setRewards(rews)
 
-      // Auto check-in immediately with fresh data
-      if (!hasCheckedIn) {
-        const freshMember = (!error && data) ? {
-          id: data.id, email: data.email, full_name: data.full_name,
-          visits_count: data.visits_count || 0, reward_status: data.reward_status || 'new', points: data.points || 0,
-        } : member
-        handleCheckInAuto(camp, freshMember)
+      // ONLY check-in if valid QR token exists and user hasn't checked in yet
+      if (qrToken && !hasCheckedIn) {
+        await handleSecureCheckIn(camp, freshMember)
       }
     }
-    initAndCheckIn()
-  }, [member.id])
+    initData()
+  }, [member.id, qrToken])
 
-  const handleCheckInAuto = async (camp: LoyaltyCampaign | null, currentMember: MemberData) => {
+  const handleSecureCheckIn = async (camp: LoyaltyCampaign | null, currentMember: MemberData) => {
     if (hasCheckedIn) return
+    
+    // Check if already checked in today (cooldown validation)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const { data: todayCheckIns } = await supabase
+      .from('check_ins')
+      .select('*')
+      .eq('member_id', currentMember.id)
+      .gte('checked_in_at', today.toISOString())
+    
+    if (todayCheckIns && todayCheckIns.length > 0) {
+      setError('You already checked in today! Come back tomorrow for more points.')
+      setHasCheckedIn(true)
+      return
+    }
+
+    // Proceed with check-in
     setIsCheckingIn(true)
     setError(null)
 
     try {
       const pointsToAdd = camp?.points_per_checkin || 5
-
-      // Insert check-in record
-      console.log('Inserting check-in for member:', member.id)
-      const { error: checkInError } = await supabase
-        .from('check_ins')
-        .insert([{
-          member_id: member.id,
-          venue: venue.name,
-        }])
-
-      if (checkInError) {
-        console.error('Check-in error:', JSON.stringify(checkInError, null, 2))
-        setError('Failed to check in. Please try again.')
-        setIsCheckingIn(false)
-        return
-      }
-
-      // Update visits + points using fresh data (not stale state)
       const newVisits = currentMember.visits_count + 1
       const newPoints = (currentMember.points || 0) + pointsToAdd
-      const newStatus = newVisits >= 1 ? 'active' : 'new'
 
-      console.log('Updating points to:', newPoints, '(+', pointsToAdd, ')')
+      // Insert check-in record
+      const { error: checkInError } = await supabase
+        .from('check_ins')
+        .insert({
+          member_id: currentMember.id,
+          venue_id: venueId || 'backstreet-cafe',
+          points_earned: pointsToAdd,
+        })
+
+      if (checkInError) throw checkInError
+
+      // Update member points and visits
       const { error: updateError } = await supabase
         .from('coffee_club_members')
-        .update({ visits_count: newVisits, reward_status: newStatus, points: newPoints })
-        .eq('id', member.id)
+        .update({
+          points: newPoints,
+          visits_count: newVisits,
+          last_check_in: new Date().toISOString(),
+        })
+        .eq('id', currentMember.id)
 
-      if (updateError) {
-        console.error('Update error:', JSON.stringify(updateError, null, 2))
-      }
+      if (updateError) throw updateError
 
-      // Check and unlock rewards
-      const campId = camp?.id || campaign?.id
-      if (campId) {
-        const updatedRewards = await checkAndUnlockRewards(member.id, newPoints, campId)
-        setMemberRewards(updatedRewards)
-      }
-
-      // Play success sound
-      playNotification()
-
-      // Update member state
       const updatedMember: MemberData = {
-        id: member.id,
-        email: member.email,
-        full_name: member.full_name,
-        visits_count: newVisits,
-        reward_status: newStatus,
+        ...currentMember,
         points: newPoints,
+        visits_count: newVisits,
       }
 
-      console.log('Check-in complete! Updated member:', updatedMember)
       setLiveMember(updatedMember)
       setHasCheckedIn(true)
+      playNotification()
+
+      // Check and unlock rewards
+      if (camp) {
+        await checkAndUnlockRewards(currentMember.id, newPoints, camp.id)
+        const statuses = await fetchRewards(camp.id)
+        setRewards(statuses)
+      }
+
       onCheckInSuccess(updatedMember)
     } catch (err) {
-      console.error('Unexpected error:', err)
-      setError('An unexpected error occurred. Please try again.')
+      console.error('Check-in error:', err)
+      setError('Failed to check in. Please try again.')
     } finally {
       setIsCheckingIn(false)
     }
   }
+
 
   const memberPoints = liveMember.points || 0
   const maxPoints = rewards.length > 0 ? Math.max(...rewards.map(r => r.points_required)) : 150
