@@ -98,8 +98,7 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
         .from('check_ins')
         .insert({
           member_id: currentMember.id,
-          venue_id: venueId || 'backstreet-cafe',
-          points_earned: pointsToAdd,
+          venue: 'Backstreet Cafe',
         })
 
       if (checkInError) throw checkInError

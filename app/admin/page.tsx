@@ -373,23 +373,32 @@ export default function AdminDashboard() {
                   <h3 className="text-sm font-medium uppercase tracking-wide mb-4" style={{ color: venue.colors.textMuted }}>
                     Check-ins by Hour (Last 30 Days)
                   </h3>
-                  <div className="flex items-end gap-1 h-40">
-                    {hourlyData.filter(h => h.hour >= 6 && h.hour <= 22).map(h => (
-                      <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>{h.count || ''}</span>
-                        <div
-                          className="w-full rounded-t transition-all"
-                          style={{
-                            height: `${Math.max((h.count / maxHourlyCount) * 100, 2)}%`,
-                            backgroundColor: h.hour === peakHour.hour ? venue.colors.accent : venue.colors.textMuted,
-                            opacity: h.hour === peakHour.hour ? 1 : 0.4,
-                          }}
-                        />
-                        <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>
-                          {formatHour(h.hour)}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="relative">
+                    {/* Grid lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between h-40 pointer-events-none">
+                      {[0, 25, 50, 75, 100].map(percent => (
+                        <div key={percent} className="w-full border-t" style={{ borderColor: '#f3f4f6' }} />
+                      ))}
+                    </div>
+                    {/* Bars */}
+                    <div className="flex items-end gap-1 h-40 relative">
+                      {hourlyData.filter(h => h.hour >= 6 && h.hour <= 22).map(h => (
+                        <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>{h.count || ''}</span>
+                          <div
+                            className="w-full rounded-t transition-all"
+                            style={{
+                              height: `${Math.max((h.count / maxHourlyCount) * 100, 2)}%`,
+                              backgroundColor: h.hour === peakHour.hour ? venue.colors.accent : venue.colors.textMuted,
+                              opacity: h.hour === peakHour.hour ? 1 : 0.4,
+                            }}
+                          />
+                          <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>
+                            {formatHour(h.hour)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -398,21 +407,30 @@ export default function AdminDashboard() {
                   <h3 className="text-sm font-medium uppercase tracking-wide mb-4" style={{ color: venue.colors.textMuted }}>
                     Check-ins by Day of Week (Last 30 Days)
                   </h3>
-                  <div className="flex items-end gap-2 h-32">
-                    {dailyData.map(d => (
-                      <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-xs font-medium" style={{ color: venue.colors.textLight }}>{d.count}</span>
-                        <div
-                          className="w-full rounded-t transition-all"
-                          style={{
-                            height: `${Math.max((d.count / maxDailyCount) * 100, 4)}%`,
-                            backgroundColor: d.day === peakDay.day ? venue.colors.accent : venue.colors.textMuted,
-                            opacity: d.day === peakDay.day ? 1 : 0.4,
-                          }}
-                        />
-                        <span className="text-xs font-medium" style={{ color: venue.colors.textMuted }}>{d.day}</span>
-                      </div>
-                    ))}
+                  <div className="relative">
+                    {/* Grid lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between h-32 pointer-events-none">
+                      {[0, 25, 50, 75, 100].map(percent => (
+                        <div key={percent} className="w-full border-t" style={{ borderColor: '#f3f4f6' }} />
+                      ))}
+                    </div>
+                    {/* Bars */}
+                    <div className="flex items-end gap-2 h-32 relative">
+                      {dailyData.map(d => (
+                        <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs font-medium" style={{ color: venue.colors.textLight }}>{d.count}</span>
+                          <div
+                            className="w-full rounded-t transition-all"
+                            style={{
+                              height: `${Math.max((d.count / maxDailyCount) * 100, 4)}%`,
+                              backgroundColor: d.day === peakDay.day ? venue.colors.accent : venue.colors.textMuted,
+                              opacity: d.day === peakDay.day ? 1 : 0.4,
+                            }}
+                          />
+                          <span className="text-xs font-medium" style={{ color: venue.colors.textMuted }}>{d.day}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -579,6 +597,34 @@ export default function AdminDashboard() {
                       {memberSearch && (
                         <button onClick={() => { setMemberSearch(''); setMemberPage(1); setExpandedMemberId(null) }} className="text-xs whitespace-nowrap underline" style={{ color: venue.colors.textMuted }}>Clear</button>
                       )}
+                      <button
+                        onClick={() => {
+                          const csv = [
+                            ['Name', 'Email', 'Points', 'Visits', 'Status', 'Created At'].join(','),
+                            ...filteredMembers.map(m => [
+                              m.full_name,
+                              m.email,
+                              m.points || 0,
+                              m.visits_count,
+                              m.reward_status,
+                              new Date(m.created_at).toLocaleDateString()
+                            ].join(','))
+                          ].join('\n')
+                          const blob = new Blob([csv], { type: 'text/csv' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `members-${new Date().toISOString().split('T')[0]}.csv`
+                          a.click()
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:bg-gray-100"
+                        style={{ color: venue.colors.textMuted }}
+                        title="Download CSV"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                   <div className="bg-white rounded-2xl shadow overflow-hidden">
@@ -773,9 +819,42 @@ export default function AdminDashboard() {
                   )}
 
                   {/* Redemptions Table */}
-                  <h3 className="font-medium" style={{ color: venue.colors.text }}>
-                    Redemption History ({redemptionRows.length})
-                  </h3>
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-medium" style={{ color: venue.colors.text }}>
+                      Redemption History ({redemptionRows.length})
+                    </h3>
+                    <button
+                      onClick={() => {
+                        const csv = [
+                          ['Member Name', 'Email', 'Reward', 'Points Spent', 'Redeemed At'].join(','),
+                          ...redemptionRows.map(r => {
+                            const m = members.find(mem => mem.id === r.member_id)
+                            const date = new Date(r.redeemed_at)
+                            return [
+                              m?.full_name || 'Unknown',
+                              m?.email || '',
+                              r.reward_name,
+                              r.points_spent,
+                              date.toLocaleString()
+                            ].join(',')
+                          })
+                        ].join('\n')
+                        const blob = new Blob([csv], { type: 'text/csv' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `redemptions-${new Date().toISOString().split('T')[0]}.csv`
+                        a.click()
+                      }}
+                      className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:bg-gray-100"
+                      style={{ color: venue.colors.textMuted }}
+                      title="Download CSV"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </button>
+                  </div>
                   {redemptionRows.length === 0 ? (
                     <div className="bg-white rounded-2xl p-8 shadow text-center" style={{ color: venue.colors.textLight }}>
                       <p>No redemptions yet</p>
@@ -1263,14 +1342,47 @@ export default function AdminDashboard() {
                     <h3 className="font-medium" style={{ color: venue.colors.text }}>
                       Recent Activity ({filteredActivity.length} check-ins)
                     </h3>
-                    <input
-                      type="text"
-                      value={activitySearch}
-                      onChange={(e) => { setActivitySearch(e.target.value); setActivityPage(1) }}
-                      placeholder="Search by name..."
-                      className="px-3 py-2 rounded-lg border text-sm w-full sm:w-56 focus:outline-none focus:ring-2"
-                      style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
-                    />
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <input
+                        type="text"
+                        value={activitySearch}
+                        onChange={(e) => { setActivitySearch(e.target.value); setActivityPage(1) }}
+                        placeholder="Search by name..."
+                        className="px-3 py-2 rounded-lg border text-sm w-full sm:w-56 focus:outline-none focus:ring-2"
+                        style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                      />
+                      <button
+                        onClick={() => {
+                          const csv = [
+                            ['Member Name', 'Email', 'Venue', 'Check-in Date', 'Check-in Time'].join(','),
+                            ...filteredActivity.map(ci => {
+                              const m = members.find(mem => mem.id === ci.member_id)
+                              const date = new Date(ci.checked_in_at)
+                              return [
+                                m?.full_name || 'Unknown',
+                                m?.email || '',
+                                ci.venue,
+                                date.toLocaleDateString(),
+                                date.toLocaleTimeString()
+                              ].join(',')
+                            })
+                          ].join('\n')
+                          const blob = new Blob([csv], { type: 'text/csv' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `activity-${new Date().toISOString().split('T')[0]}.csv`
+                          a.click()
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-medium transition-all hover:bg-gray-100"
+                        style={{ color: venue.colors.textMuted }}
+                        title="Download CSV"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   {activitySearch && (
                     <div className="flex items-center gap-2">
