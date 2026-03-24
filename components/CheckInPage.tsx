@@ -290,6 +290,21 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
           View My Rewards
         </button>
 
+        {/* Logout button (discrete) */}
+        <button
+          onClick={() => {
+            if (confirm('Clear your account data from this device?')) {
+              localStorage.clear()
+              sessionStorage.clear()
+              window.location.href = '/'
+            }
+          }}
+          className="text-xs underline opacity-50 hover:opacity-100 transition-opacity"
+          style={{ color: venue.colors.textMuted }}
+        >
+          Not you? Clear data
+        </button>
+
         {/* Footer */}
         <p className="text-xs tracking-wide text-center mt-8" style={{ color: venue.colors.textMuted }}>
           Powered by MenuLove™
