@@ -114,23 +114,6 @@ export default function LandingPage({ venueId }: LandingPageProps) {
           </div>
         )}
 
-        {/* QR Code */}
-        {qrUrl && (
-          <div className="flex flex-col items-center gap-2">
-            <div className="p-3 bg-white rounded-2xl shadow-lg">
-              <QRCodeSVG 
-                value={qrUrl}
-                size={200}
-                level="H"
-                includeMargin={false}
-                fgColor={venue.colors.primary}
-              />
-            </div>
-            <p className="text-xs" style={{ color: venue.colors.textLight }}>
-              Every check-in = {campaign?.points_per_checkin || 5} points. The more you visit, the more you unlock.
-            </p>
-          </div>
-        )}
 
         {/* Footer */}
         <p className="text-xs tracking-wide mt-4" style={{ color: venue.colors.textMuted }}>
