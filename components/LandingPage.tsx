@@ -11,16 +11,29 @@ interface LandingPageProps {
 
 export default function LandingPage({ venueId }: LandingPageProps) {
   const venue = useVenue(venueId)
-  const [currentUrl, setCurrentUrl] = useState('')
+  const [qrUrl, setQrUrl] = useState('')
   const [campaign, setCampaign] = useState<LoyaltyCampaign | null>(null)
   const [rewards, setRewards] = useState<LoyaltyReward[]>([])
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setCurrentUrl(window.location.href)
+      // Generate secure QR code with token
+      const updateQRCode = () => {
+        const currentHour = new Date().toISOString().slice(0, 13)
+        const token = btoa(currentHour + venue.id).slice(0, 16)
+        const baseUrl = window.location.origin
+        const url = `${baseUrl}/?action=checkin&token=${token}`
+        setQrUrl(url)
+      }
+      
+      updateQRCode()
+      const interval = setInterval(updateQRCode, 60000)
+      
+      loadCampaignData()
+      
+      return () => clearInterval(interval)
     }
-    loadCampaignData()
-  }, [])
+  }, [venue.id])
 
   const loadCampaignData = async () => {
     const camp = await fetchCampaign(venueId)
@@ -72,7 +85,7 @@ export default function LandingPage({ venueId }: LandingPageProps) {
             {campaign?.campaign_name || 'BACKSTREET POINTS CLUB'}
           </p>
           <h1 className="text-3xl sm:text-4xl font-serif leading-tight" style={{ color: venue.colors.text }}>
-            Your Backstreet
+            Your {venue.brand.split(' ')[0]}
           </h1>
           <h2 className="text-3xl sm:text-4xl font-serif italic" style={{ color: venue.colors.text }}>
             Rewards
@@ -102,12 +115,12 @@ export default function LandingPage({ venueId }: LandingPageProps) {
         )}
 
         {/* QR Code */}
-        {currentUrl && (
+        {qrUrl && (
           <div className="flex flex-col items-center gap-2">
             <div className="p-3 bg-white rounded-2xl shadow-lg">
               <QRCodeSVG 
-                value={`${currentUrl.split('?')[0]}?action=checkin`}
-                size={140}
+                value={qrUrl}
+                size={200}
                 level="H"
                 includeMargin={false}
                 fgColor={venue.colors.primary}

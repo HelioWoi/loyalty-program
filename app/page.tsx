@@ -20,7 +20,9 @@ export default function Home() {
   const { member, isMember, login, updateMember } = useAuth()
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const handleQRScan = async () => {
+      if (typeof window === 'undefined') return
+      
       const hostname = window.location.hostname
       const venue = getVenueFromHostname(hostname)
       setVenueId(venue.id)
@@ -43,10 +45,11 @@ export default function Home() {
           window.history.replaceState({}, '', window.location.pathname)
           
           if (isMember && member) {
-            // Member scans QR → go to check-in page
+            // Already logged in → go to check-in page
             setCurrentScreen('checkin')
           } else {
-            // Non-member scans QR → signup form
+            // Not logged in → show signup form
+            // User will either signup or we'll detect existing email and auto-login
             setCurrentScreen('signup')
           }
         } else {
@@ -56,6 +59,8 @@ export default function Home() {
         }
       }
     }
+    
+    handleQRScan()
   }, [isMember, member])
 
   const handleBack = () => {
@@ -83,10 +88,40 @@ export default function Home() {
   const handleSignupSubmit = async (data: SignupFormData) => {
     try {
       const venue = getVenueFromHostname(window.location.hostname)
-      console.log('Attempting to save:', data, 'for venue:', venue.brand)
-      console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-      console.log('Supabase Key exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+      console.log('Processing signup/login for:', data.email)
       
+      // First, check if email already exists
+      const { data: existingMember, error: checkError } = await supabase
+        .from('coffee_club_members')
+        .select('*')
+        .eq('email', data.email)
+        .eq('venue', venue.name)
+        .single()
+
+      if (existingMember && !checkError) {
+        // Email exists - auto login
+        console.log('Email found, logging in existing member:', existingMember.full_name)
+        const memberData: MemberData = {
+          id: existingMember.id,
+          email: existingMember.email,
+          full_name: existingMember.full_name,
+          visits_count: existingMember.visits_count || 0,
+          reward_status: existingMember.reward_status || 'new',
+          points: existingMember.points || 0,
+        }
+        login(memberData)
+        
+        // If QR token exists, go directly to check-in
+        if (qrToken) {
+          setCurrentScreen('checkin')
+        } else {
+          setCurrentScreen('success')
+        }
+        return
+      }
+
+      // Email doesn't exist - create new account
+      console.log('Creating new account for:', data.email)
       const { data: insertData, error } = await supabase
         .from('coffee_club_members')
         .insert([
@@ -103,67 +138,46 @@ export default function Home() {
         ])
         .select()
 
-      console.log('Insert result - data:', insertData)
-      console.log('Insert result - error:', error)
-
       if (error) {
-        console.error('Supabase error:', error)
-        console.error('Error code:', error.code)
-        console.error('Error message:', error.message)
-        console.error('Error details:', error.details)
-        console.error('Error hint:', error.hint)
-        console.error('Error stringified:', JSON.stringify(error, null, 2))
-        
-        // Check if it's a duplicate email error
-        if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
-          // Email already exists - fetch existing member and log them in
-          console.log('Email already exists, logging in existing member...')
-          const { data: existingMember, error: fetchError } = await supabase
-            .from('coffee_club_members')
-            .select('*')
-            .eq('email', data.email)
-            .single()
-
-          if (!fetchError && existingMember) {
-            const memberData: MemberData = {
-              id: existingMember.id,
-              email: existingMember.email,
-              full_name: existingMember.full_name,
-              visits_count: existingMember.visits_count || 0,
-              reward_status: existingMember.reward_status || 'new',
-              points: existingMember.points || 0,
-            }
-            login(memberData)
-            setCurrentScreen('success')
-            return
-          }
-        }
-        
-        // Other error - still proceed to success page
-        console.log('Unknown error, proceeding anyway...')
-      } else {
-        // Fetch the created member to get the ID
-        const { data: memberData, error: fetchError } = await supabase
+        console.error('Insert error:', error)
+        // Even if insert fails, try to fetch the member (might be race condition)
+        const { data: retryMember } = await supabase
           .from('coffee_club_members')
           .select('*')
           .eq('email', data.email)
+          .eq('venue', venue.name)
           .single()
-
-        if (!fetchError && memberData) {
-          // Save member data to localStorage
-          const newMember: MemberData = {
-            id: memberData.id,
-            email: memberData.email,
-            full_name: memberData.full_name,
-            visits_count: memberData.visits_count || 0,
-            reward_status: memberData.reward_status || 'new',
-            points: memberData.points || 0,
+        
+        if (retryMember) {
+          const memberData: MemberData = {
+            id: retryMember.id,
+            email: retryMember.email,
+            full_name: retryMember.full_name,
+            visits_count: retryMember.visits_count || 0,
+            reward_status: retryMember.reward_status || 'new',
+            points: retryMember.points || 0,
           }
-          login(newMember)
+          login(memberData)
         }
+      } else if (insertData && insertData[0]) {
+        // Success - login new member
+        const newMember: MemberData = {
+          id: insertData[0].id,
+          email: insertData[0].email,
+          full_name: insertData[0].full_name,
+          visits_count: insertData[0].visits_count || 0,
+          reward_status: insertData[0].reward_status || 'new',
+          points: insertData[0].points || 0,
+        }
+        login(newMember)
       }
 
-      setCurrentScreen('success')
+      // If QR token exists, go directly to check-in
+      if (qrToken) {
+        setCurrentScreen('checkin')
+      } else {
+        setCurrentScreen('success')
+      }
     } catch (error) {
       console.error('Signup error:', error)
       setCurrentScreen('success')
