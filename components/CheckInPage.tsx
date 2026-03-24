@@ -134,9 +134,15 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
       }
 
       onCheckInSuccess(updatedMember)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Check-in error:', err)
-      setError('Failed to check in. Please try again.')
+      // Check if it's a duplicate check-in error (unique constraint violation)
+      if (err?.code === '23505' || err?.message?.includes('duplicate')) {
+        setError('You already checked in today! Come back tomorrow for more points.')
+        setHasCheckedIn(true)
+      } else {
+        setError('Failed to check in. Please try again.')
+      }
     } finally {
       setIsCheckingIn(false)
     }
