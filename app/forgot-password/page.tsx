@@ -37,6 +37,11 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-lg p-8">
           <div className="text-center mb-8">
+            <img 
+              src="https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/logo%20menulove%20black.png"
+              alt="MenuLove"
+              className="h-12 mx-auto mb-6"
+            />
             <h1 className="text-2xl font-serif font-bold mb-2" style={{ color: '#2d2d2d' }}>
               Reset Password
             </h1>

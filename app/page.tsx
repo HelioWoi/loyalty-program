@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import LandingPage from '@/components/LandingPage'
+import InstitutionalLanding from '@/components/InstitutionalLanding'
 import SignupForm from '@/components/SignupForm'
 import SuccessPage from '@/components/SuccessPage'
 import CheckInPage from '@/components/CheckInPage'
@@ -17,6 +18,7 @@ export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
   const [venueId, setVenueId] = useState<string>('backstreet-cafe')
   const [qrToken, setQrToken] = useState<string | null>(null)
+  const [isMainDomain, setIsMainDomain] = useState(false)
   const { member, isMember, isLoading, login, updateMember } = useAuth()
 
   useEffect(() => {
@@ -24,6 +26,18 @@ export default function Home() {
       if (typeof window === 'undefined') return
       
       const hostname = window.location.hostname
+      
+      // Check if this is the main domain (no subdomain or localhost)
+      const isMain = hostname === 'menulove-rewards.netlify.app' || 
+                     hostname === 'localhost' ||
+                     hostname === '127.0.0.1' ||
+                     !hostname.includes('.')
+      
+      setIsMainDomain(isMain)
+      
+      // If main domain, don't process venue-specific logic
+      if (isMain) return
+      
       const venue = getVenueFromHostname(hostname)
       setVenueId(venue.id)
 
@@ -193,6 +207,11 @@ export default function Home() {
 
   const handleDone = () => {
     setCurrentScreen(isMember ? 'checkin' : 'landing')
+  }
+
+  // Show institutional landing page for main domain
+  if (isMainDomain) {
+    return <InstitutionalLanding />
   }
 
   return (

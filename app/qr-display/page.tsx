@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { getVenueFromHostname } from '@/lib/venues'
 import { fetchCampaign, fetchRewards, LoyaltyCampaign, LoyaltyReward } from '@/lib/loyalty'
 import { supabase } from '@/lib/supabase'
 
 export default function QRDisplayPage() {
+  const router = useRouter()
   const [qrUrl, setQrUrl] = useState('')
   const [venue, setVenue] = useState<any>(null)
   const [campaign, setCampaign] = useState<LoyaltyCampaign | null>(null)
@@ -41,7 +43,13 @@ export default function QRDisplayPage() {
           const updateQRCode = () => {
             const currentHour = new Date().toISOString().slice(0, 13)
             const token = btoa(currentHour + venueData.id).slice(0, 16)
-            const baseUrl = window.location.origin
+            
+            // Use venue_name to generate correct subdomain URL
+            const hostname = window.location.hostname
+            const domain = hostname.includes('localhost') ? 'localhost:3000' : hostname.replace(/^[^.]+\./, '')
+            const subdomain = venueData.venue_name.toLowerCase().replace(/\s+/g, '')
+            const baseUrl = `${window.location.protocol}//${subdomain}.${domain}`
+            
             const url = `${baseUrl}/?action=checkin&token=${token}`
             setQrUrl(url)
           }
@@ -130,6 +138,15 @@ export default function QRDisplayPage() {
             Every check-in = {campaign?.points_per_checkin || 5} points. The more you visit, the more you unlock.
           </p>
         </div>
+
+        {/* Join Us Button */}
+        <button
+          onClick={() => router.push('/')}
+          className="w-full max-w-xs px-6 py-3 rounded-xl font-semibold text-base transition-all hover:opacity-90 shadow-lg"
+          style={{ backgroundColor: venue.colors.primary, color: 'white' }}
+        >
+          Join Us
+        </button>
 
         {/* Footer */}
         <p className="text-xs tracking-wide mt-4" style={{ color: venue.colors.textMuted }}>

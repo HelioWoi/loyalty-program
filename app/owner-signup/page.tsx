@@ -106,6 +106,11 @@ export default function OwnerSignupPage() {
     <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: '#f5f5f0' }}>
       <div className="bg-white rounded-2xl p-8 shadow-lg max-w-md w-full">
         <div className="text-center mb-8">
+          <img 
+            src="https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/logo%20menulove%20black.png"
+            alt="MenuLove"
+            className="h-12 mx-auto mb-6"
+          />
           <h1 className="text-3xl font-serif mb-2" style={{ color: '#2d2d2d' }}>
             Start Your Loyalty Program
           </h1>

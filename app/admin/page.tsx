@@ -273,59 +273,116 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: venue.colors.background }}>
       {/* Header */}
-      <div className="px-6 py-4 shadow-sm" style={{ backgroundColor: 'white' }}>
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            {currentVenue?.logo_url && (
-              <img src={currentVenue.logo_url} alt={currentVenue.venue_name} className="w-10 h-10 object-contain" />
-            )}
-            <div>
-              <h1 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>
-                {currentVenue?.venue_name || venue.brand}
-              </h1>
-              <p className="text-xs" style={{ color: venue.colors.textLight }}>Owner Dashboard</p>
+      <div className="px-4 sm:px-6 py-3 sm:py-4 shadow-sm" style={{ backgroundColor: 'white' }}>
+        <div className="max-w-6xl mx-auto">
+          {/* Mobile Layout */}
+          <div className="flex sm:hidden flex-col gap-3">
+            <div className="flex items-center justify-center relative">
+              <img 
+                src="https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/logo%20menulove%20black.png"
+                alt="MenuLove"
+                className="h-10"
+              />
+              <button
+                onClick={logout}
+                className="absolute right-0 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-gray-100"
+                style={{ color: venue.colors.textLight }}
+              >
+                Logout
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {currentVenue?.logo_url && (
+                  <img src={currentVenue.logo_url} alt={currentVenue.venue_name} className="w-8 h-8 object-contain" />
+                )}
+                <div>
+                  <h1 className="text-sm font-serif font-bold" style={{ color: venue.colors.text }}>
+                    {currentVenue?.venue_name || venue.brand}
+                  </h1>
+                  <p className="text-[10px]" style={{ color: venue.colors.textLight }}>Owner Dashboard</p>
+                </div>
+              </div>
+              {venues.length > 1 && currentVenue && (
+                <select
+                  value={currentVenue.id}
+                  onChange={(e) => {
+                    const selected = venues.find(v => v.id === e.target.value)
+                    if (selected) setCurrentVenue(selected)
+                  }}
+                  className="px-2 py-1.5 rounded-lg border text-xs focus:outline-none focus:ring-2"
+                  style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                >
+                  {venues.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.venue_name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
-          
-          <div className="flex items-center gap-3">
-            {/* Venue Selector - only show if owner has multiple venues */}
-            {venues.length > 1 && currentVenue && (
-              <select
-                value={currentVenue.id}
-                onChange={(e) => {
-                  const selected = venues.find(v => v.id === e.target.value)
-                  if (selected) setCurrentVenue(selected)
-                }}
-                className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
-                style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
-              >
-                {venues.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.venue_name}
-                  </option>
-                ))}
-              </select>
-            )}
+
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center">
+            <div className="flex items-center gap-6">
+              <img 
+                src="https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/logo%20menulove%20black.png"
+                alt="MenuLove"
+                className="h-8"
+              />
+              <div className="flex items-center gap-3">
+                {currentVenue?.logo_url && (
+                  <img src={currentVenue.logo_url} alt={currentVenue.venue_name} className="w-10 h-10 object-contain" />
+                )}
+                <div>
+                  <h1 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>
+                    {currentVenue?.venue_name || venue.brand}
+                  </h1>
+                  <p className="text-xs" style={{ color: venue.colors.textLight }}>Owner Dashboard</p>
+                </div>
+              </div>
+            </div>
             
-            <button
-              onClick={logout}
-              className="text-sm px-4 py-2 rounded-lg transition-colors hover:bg-gray-100"
-              style={{ color: venue.colors.textLight }}
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-3">
+              {venues.length > 1 && currentVenue && (
+                <select
+                  value={currentVenue.id}
+                  onChange={(e) => {
+                    const selected = venues.find(v => v.id === e.target.value)
+                    if (selected) setCurrentVenue(selected)
+                  }}
+                  className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                  style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                >
+                  {venues.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.venue_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              
+              <button
+                onClick={logout}
+                className="text-sm px-4 py-2 rounded-lg transition-colors hover:bg-gray-100"
+                style={{ color: venue.colors.textLight }}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-8">
         {/* Tabs */}
         <div className="flex gap-2 flex-wrap">
           {(['overview', 'members', 'activity', 'redemptions', 'campaign', 'account'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all capitalize whitespace-nowrap"
               style={{
                 backgroundColor: activeTab === tab ? venue.colors.primary : 'white',
                 color: activeTab === tab ? 'white' : venue.colors.text,
@@ -388,35 +445,37 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Hourly Chart */}
-                <div className="bg-white rounded-2xl p-6 shadow">
-                  <h3 className="text-sm font-medium uppercase tracking-wide mb-4" style={{ color: venue.colors.textMuted }}>
+                <div className="bg-white rounded-2xl p-4 sm:p-6 shadow">
+                  <h3 className="text-xs sm:text-sm font-medium uppercase tracking-wide mb-4" style={{ color: venue.colors.textMuted }}>
                     Check-ins by Hour (Last 30 Days)
                   </h3>
-                  <div className="relative">
-                    {/* Grid lines */}
-                    <div className="absolute inset-0 flex flex-col justify-between h-40 pointer-events-none">
-                      {[0, 25, 50, 75, 100].map(percent => (
-                        <div key={percent} className="w-full border-t" style={{ borderColor: '#f3f4f6' }} />
-                      ))}
-                    </div>
-                    {/* Bars */}
-                    <div className="flex items-end gap-1 h-40 relative">
-                      {hourlyData.filter(h => h.hour >= 6 && h.hour <= 22).map(h => (
-                        <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
-                          <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>{h.count || ''}</span>
-                          <div
-                            className="w-full rounded-t transition-all"
-                            style={{
-                              height: `${Math.max((h.count / maxHourlyCount) * 100, 2)}%`,
-                              backgroundColor: h.hour === peakHour.hour ? venue.colors.accent : venue.colors.textMuted,
-                              opacity: h.hour === peakHour.hour ? 1 : 0.4,
-                            }}
-                          />
-                          <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>
-                            {formatHour(h.hour)}
-                          </span>
-                        </div>
-                      ))}
+                  <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="relative min-w-[500px]">
+                      {/* Grid lines */}
+                      <div className="absolute inset-0 flex flex-col justify-between h-40 pointer-events-none">
+                        {[0, 25, 50, 75, 100].map(percent => (
+                          <div key={percent} className="w-full border-t" style={{ borderColor: '#f3f4f6' }} />
+                        ))}
+                      </div>
+                      {/* Bars */}
+                      <div className="flex items-end gap-1 h-40 relative">
+                        {hourlyData.filter(h => h.hour >= 6 && h.hour <= 22).map(h => (
+                          <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
+                            <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>{h.count || ''}</span>
+                            <div
+                              className="w-full rounded-t transition-all"
+                              style={{
+                                height: `${Math.max((h.count / maxHourlyCount) * 100, 2)}%`,
+                                backgroundColor: h.hour === peakHour.hour ? venue.colors.accent : venue.colors.textMuted,
+                                opacity: h.hour === peakHour.hour ? 1 : 0.4,
+                              }}
+                            />
+                            <span className="text-[10px]" style={{ color: venue.colors.textMuted }}>
+                              {formatHour(h.hour)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -946,6 +1005,67 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Signup URLs */}
+                <div className="bg-white rounded-2xl p-6 shadow space-y-4">
+                  <div>
+                    <h3 className="font-medium text-lg" style={{ color: venue.colors.text }}>QR Display URLs</h3>
+                    <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>
+                      Open these URLs on your tablet or POS system at checkout. Customers scan the QR code when purchasing to earn points. Each location has its own unique URL.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {venues.map((v) => {
+                      const signupUrl = typeof window !== 'undefined' 
+                        ? `${window.location.protocol}//${v.subdomain}.${window.location.hostname.replace(/^[^.]+\./, '')}` 
+                        : `https://${v.subdomain}.menulove.com.au`
+                      
+                      return (
+                        <div key={v.id} className="p-4 rounded-xl border" style={{ borderColor: '#e5e7eb', backgroundColor: '#fafafa' }}>
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {v.logo_url && (
+                                <img src={v.logo_url} alt={v.venue_name} className="w-6 h-6 object-contain flex-shrink-0" />
+                              )}
+                              <p className="text-sm font-medium truncate" style={{ color: venue.colors.text }}>
+                                {v.venue_name}
+                              </p>
+                            </div>
+                            {v.id === currentVenue?.id && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap" style={{ backgroundColor: venue.colors.accent, color: 'white' }}>
+                                Current
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={signupUrl}
+                              className="flex-1 px-3 py-2 rounded-lg border text-xs font-mono bg-white"
+                              style={{ borderColor: '#d4d4d4', color: venue.colors.text }}
+                              onClick={(e) => e.currentTarget.select()}
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(signupUrl)
+                                alert('URL copied to clipboard!')
+                              }}
+                              className="px-4 py-2 rounded-lg text-xs font-medium transition-all hover:opacity-80 whitespace-nowrap"
+                              style={{ backgroundColor: venue.colors.primary, color: 'white' }}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <p className="text-[10px] mt-2" style={{ color: venue.colors.textMuted }}>
+                            Open this URL on your tablet/POS at checkout. Customers scan the QR code to earn points at {v.venue_name}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* Branding */}
                 <div className="bg-white rounded-2xl p-6 shadow space-y-4">
                   <div className="flex justify-between items-start">
@@ -1124,10 +1244,29 @@ export default function AdminDashboard() {
                           const businessName = e.target.value
                           setCampaignData({ ...campaignData, campaign_name: businessName ? `${businessName} POINTS CLUB` : '' })
                         }}
-                        onBlur={(e) => {
-                          // Trim only on blur to clean up extra spaces
+                        onBlur={async (e) => {
                           const businessName = e.target.value.trim()
-                          setCampaignData({ ...campaignData, campaign_name: businessName ? `${businessName} POINTS CLUB` : '' })
+                          const fullCampaignName = businessName ? `${businessName} POINTS CLUB` : ''
+                          setCampaignData({ ...campaignData, campaign_name: fullCampaignName })
+                          
+                          // Save to database and sync with venue_name
+                          if (businessName && currentVenue) {
+                            try {
+                              // Update campaign
+                              await supabase
+                                .from('loyalty_campaigns')
+                                .update({ campaign_name: fullCampaignName })
+                                .eq('id', campaignData.id)
+                              
+                              // Sync venue_name
+                              await supabase
+                                .from('venues')
+                                .update({ venue_name: businessName })
+                                .eq('id', currentVenue.id)
+                            } catch (err) {
+                              console.error('Save error:', err)
+                            }
+                          }
                         }}
                         placeholder="Enter your business name"
                         className="w-full mt-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 text-sm"
@@ -1654,6 +1793,67 @@ export default function AdminDashboard() {
                       <p className="mt-1 text-sm font-medium" style={{ color: venue.colors.text }}>{venues.length} {venues.length === 1 ? 'location' : 'locations'}</p>
                     </div>
                   </div>
+
+                  {/* Locations List */}
+                  {venues.length > 0 && (
+                    <div className="pt-4 border-t" style={{ borderColor: '#e5e7eb' }}>
+                      <label className="text-xs font-medium uppercase tracking-wide mb-3 block" style={{ color: venue.colors.textMuted }}>Your Locations</label>
+                      <div className="space-y-2">
+                        {venues.map((v) => (
+                          <div key={v.id} className="flex items-center justify-between p-3 rounded-lg border" style={{ borderColor: '#e5e7eb' }}>
+                            <div className="flex items-center gap-3">
+                              {v.logo_url && (
+                                <img src={v.logo_url} alt={v.venue_name} className="w-8 h-8 object-contain" />
+                              )}
+                              <div>
+                                <p className="text-sm font-medium" style={{ color: venue.colors.text }}>{v.venue_name}</p>
+                                <p className="text-xs" style={{ color: venue.colors.textMuted }}>{v.subdomain}.menulove.com.au</p>
+                              </div>
+                            </div>
+                            {venues.length > 1 && (
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Delete "${v.venue_name}"? This will permanently remove all data for this location including all members, check-ins, and campaigns.`)) return
+                                  
+                                  try {
+                                    // If deleting current venue, switch to another one first
+                                    if (currentVenue?.id === v.id) {
+                                      const otherVenue = venues.find(venue => venue.id !== v.id)
+                                      if (otherVenue) {
+                                        setCurrentVenue(otherVenue)
+                                      }
+                                    }
+
+                                    // Delete the venue
+                                    const { error } = await supabase
+                                      .from('venues')
+                                      .delete()
+                                      .eq('id', v.id)
+                                      .eq('owner_id', owner.id)
+                                    
+                                    if (error) {
+                                      console.error('Delete error:', error)
+                                      throw error
+                                    }
+                                    
+                                    // Reload to refresh venue list
+                                    window.location.reload()
+                                  } catch (err: any) {
+                                    console.error('Delete error:', err)
+                                    alert(`Failed to delete location: ${err.message || 'Unknown error'}`)
+                                  }
+                                }}
+                                className="text-xs px-3 py-1.5 rounded-lg border transition-all hover:bg-red-50"
+                                style={{ borderColor: '#fee', color: '#dc2626' }}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Add New Location Button */}
                   <div className="pt-4 border-t" style={{ borderColor: '#e5e7eb' }}>
