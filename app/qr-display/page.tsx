@@ -76,9 +76,18 @@ export default function QRDisplayPage() {
             const token = btoa(currentHour + venueData.id).slice(0, 16)
             
             // Build correct subdomain URL
-            const domain = hostname.includes('localhost') ? 'localhost:3000' : hostname.replace(/^[^.]+\./, '')
-            const subdomain = venueData.subdomain || venueData.venue_name.toLowerCase().replace(/\s+/g, '')
-            const baseUrl = `${window.location.protocol}//${subdomain}.${domain}`
+            let baseUrl
+            if (hostname.includes('localhost')) {
+              const subdomain = venueData.subdomain || venueData.venue_name.toLowerCase().replace(/\s+/g, '')
+              baseUrl = `http://${subdomain}.localhost:3000`
+            } else {
+              // In production, try subdomain first, fallback to current domain
+              const subdomain = venueData.subdomain || venueData.venue_name.toLowerCase().replace(/\s+/g, '')
+              const subdomainUrl = `${window.location.protocol}//${subdomain}.menulove.com.au`
+              const currentUrl = `${window.location.protocol}//${hostname}`
+              // Use current domain as fallback (works even if subdomain not configured)
+              baseUrl = currentUrl
+            }
             
             const url = `${baseUrl}/?action=checkin&token=${token}`
             setQrUrl(url)
