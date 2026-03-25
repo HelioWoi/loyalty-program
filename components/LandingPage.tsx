@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useVenue } from '@/hooks/useVenue'
 import { fetchCampaign, fetchRewards, LoyaltyCampaign, LoyaltyReward } from '@/lib/loyalty'
+import { supabase } from '@/lib/supabase'
 
 interface LandingPageProps {
   venueId?: string
@@ -36,56 +37,53 @@ export default function LandingPage({ venueId }: LandingPageProps) {
   }, [venue.id])
 
   const loadCampaignData = async () => {
-    const camp = await fetchCampaign(venueId)
+    // If no venueId provided, fetch from database
+    let actualVenueId = venueId
+    if (!actualVenueId || actualVenueId === 'backstreet-cafe') {
+      // Fetch first active venue from database
+      const { data: venueData } = await supabase
+        .from('venues')
+        .select('id')
+        .eq('active', true)
+        .limit(1)
+        .single()
+      
+      if (venueData) {
+        actualVenueId = venueData.id
+      }
+    }
+
+    const camp = await fetchCampaign(actualVenueId)
     setCampaign(camp)
-    const rews = await fetchRewards(camp.id)
-    setRewards(rews)
+    
+    if (camp.id) {
+      const rews = await fetchRewards(camp.id)
+      setRewards(rews)
+    }
   }
 
   
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-4 sm:p-6 pt-8 sm:pt-12" style={{ backgroundColor: venue.colors.background }}>
       <div className="flex flex-col items-center justify-center max-w-md w-full text-center space-y-5">
-        {/* Logo or Coffee Icon */}
-        {(campaign?.logo_url || venue.logo) ? (
+        {/* Logo - only show if uploaded */}
+        {campaign?.logo_url && (
           <div className="w-24 h-24 flex items-center justify-center">
             <img 
-              src={campaign?.logo_url || venue.logo} 
-              alt={venue.brand}
+              src={campaign.logo_url} 
+              alt="Logo"
               className="w-full h-full object-contain"
-              onError={(e) => {
-                console.error('Logo failed to load:', campaign?.logo_url || venue.logo)
-                e.currentTarget.style.display = 'none'
-              }}
-              onLoad={() => console.log('Logo loaded successfully:', campaign?.logo_url || venue.logo)}
             />
-          </div>
-        ) : (
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: venue.colors.primary }}>
-            <svg 
-              className="w-10 h-10" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              style={{ color: venue.colors.accent }}
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                d="M3 3h15M8 3v3m4-3v3M5 6h12a2 2 0 012 2v10a4 4 0 01-4 4H7a4 4 0 01-4-4V8a2 2 0 012-2zm14 4h1a2 2 0 012 2v2a2 2 0 01-2 2h-1" 
-              />
-            </svg>
           </div>
         )}
 
         {/* Title Section */}
         <div className="space-y-3">
           <p className="text-sm font-medium tracking-[0.2em] uppercase" style={{ color: venue.colors.accent }}>
-            {campaign?.campaign_name || 'BACKSTREET POINTS CLUB'}
+            {campaign?.campaign_name || 'LOYALTY PROGRAM'}
           </p>
           <h1 className="text-3xl sm:text-4xl font-serif leading-tight" style={{ color: venue.colors.text }}>
-            Your {venue.brand.split(' ')[0]}
+            Your {campaign?.campaign_name ? campaign.campaign_name.replace(' POINTS CLUB', '') : venue.brand}
           </h1>
           <h2 className="text-3xl sm:text-4xl font-serif italic" style={{ color: venue.colors.text }}>
             Rewards

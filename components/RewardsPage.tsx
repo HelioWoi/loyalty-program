@@ -184,24 +184,18 @@ export default function RewardsPage({ member, venueId, onBack, onClaimReward }: 
           <span className="text-sm font-medium">Back</span>
         </button>
 
-        {/* Logo */}
-        <div className="flex justify-center">
-          {(campaign?.logo_url || venue.logo) ? (
+        {/* Logo - only show if uploaded */}
+        {campaign?.logo_url && (
+          <div className="flex justify-center">
             <div className="w-20 h-20 flex items-center justify-center">
               <img 
-                src={campaign?.logo_url || venue.logo} 
-                alt={venue.brand}
+                src={campaign.logo_url} 
+                alt="Logo"
                 className="w-full h-full object-contain"
               />
             </div>
-          ) : (
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: venue.colors.primary }}>
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" style={{ color: venue.colors.accent }}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h15M8 3v3m4-3v3M5 6h12a2 2 0 012 2v10a4 4 0 01-4 4H7a4 4 0 01-4-4V8a2 2 0 012-2zm14 4h1a2 2 0 012 2v2a2 2 0 01-2 2h-1" />
-              </svg>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Title */}
         <div className="text-center space-y-2">

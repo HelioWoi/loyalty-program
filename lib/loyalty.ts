@@ -46,8 +46,8 @@ export interface Redemption {
 // Default campaign config (fallback if DB not available)
 export const DEFAULT_CAMPAIGN: LoyaltyCampaign = {
   id: '',
-  venue_id: 'backstreet-cafe',
-  campaign_name: 'Backstreet Points Club',
+  venue_id: '',
+  campaign_name: 'Loyalty Program',
   points_per_checkin: 5,
   active: true,
 }
@@ -60,7 +60,12 @@ export const DEFAULT_REWARDS: LoyaltyReward[] = [
 ]
 
 // Fetch campaign config
-export async function fetchCampaign(venueId: string = 'backstreet-cafe'): Promise<LoyaltyCampaign> {
+export async function fetchCampaign(venueId?: string): Promise<LoyaltyCampaign> {
+  if (!venueId) {
+    console.error('No venueId provided to fetchCampaign')
+    return DEFAULT_CAMPAIGN
+  }
+
   const { data, error } = await supabase
     .from('loyalty_campaigns')
     .select('*')
@@ -69,7 +74,7 @@ export async function fetchCampaign(venueId: string = 'backstreet-cafe'): Promis
     .single()
 
   if (error || !data) {
-    console.log('Using default campaign config')
+    console.error('Campaign fetch error:', error)
     return DEFAULT_CAMPAIGN
   }
   return data

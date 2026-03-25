@@ -20,7 +20,7 @@ export const venues: Record<string, VenueConfig> = {
   'backstreet-cafe': {
     id: 'backstreet-cafe',
     name: 'Backstreet Cafe',
-    brand: 'Backstreet Coffee Club',
+    brand: 'Backstreet Cafe',
     description: 'Join the exclusive circle of coffee lovers at Backstreet Cafe.',
     logo: 'https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/logo.png',
     colors: {

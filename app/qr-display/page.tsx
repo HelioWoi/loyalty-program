@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { getVenueFromHostname } from '@/lib/venues'
 import { fetchCampaign, fetchRewards, LoyaltyCampaign, LoyaltyReward } from '@/lib/loyalty'
+import { supabase } from '@/lib/supabase'
 
 export default function QRDisplayPage() {
   const [qrUrl, setQrUrl] = useState('')
@@ -17,28 +18,41 @@ export default function QRDisplayPage() {
       const venueConfig = getVenueFromHostname(hostname)
       setVenue(venueConfig)
 
-      // Load campaign and rewards
+      // Load campaign and rewards from database
       const loadData = async () => {
-        const camp = await fetchCampaign()
-        setCampaign(camp)
-        const rews = await fetchRewards(camp.id)
-        setRewards(rews)
+        // Fetch first active venue from database
+        const { data: venueData } = await supabase
+          .from('venues')
+          .select('id, venue_name, logo_url')
+          .eq('active', true)
+          .limit(1)
+          .single()
+
+        if (venueData) {
+          const camp = await fetchCampaign(venueData.id)
+          setCampaign(camp)
+          
+          if (camp.id) {
+            const rews = await fetchRewards(camp.id)
+            setRewards(rews)
+          }
+
+          // Generate time-based token (changes every hour)
+          const updateQRCode = () => {
+            const currentHour = new Date().toISOString().slice(0, 13)
+            const token = btoa(currentHour + venueData.id).slice(0, 16)
+            const baseUrl = window.location.origin
+            const url = `${baseUrl}/?action=checkin&token=${token}`
+            setQrUrl(url)
+          }
+
+          updateQRCode()
+          const interval = setInterval(updateQRCode, 60000)
+
+          return () => clearInterval(interval)
+        }
       }
       loadData()
-
-      // Generate time-based token (changes every hour)
-      const updateQRCode = () => {
-        const currentHour = new Date().toISOString().slice(0, 13)
-        const token = btoa(currentHour + venueConfig.id).slice(0, 16)
-        const baseUrl = window.location.origin
-        const url = `${baseUrl}/?action=checkin&token=${token}`
-        setQrUrl(url)
-      }
-
-      updateQRCode()
-      const interval = setInterval(updateQRCode, 60000)
-
-      return () => clearInterval(interval)
     }
   }, [])
 
@@ -53,30 +67,24 @@ export default function QRDisplayPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8" style={{ backgroundColor: venue.colors.background }}>
       <div className="flex flex-col items-center justify-center max-w-md w-full text-center space-y-5">
-        {/* Logo */}
-        {(campaign?.logo_url || venue.logo) ? (
+        {/* Logo - only show if uploaded */}
+        {campaign?.logo_url && (
           <div className="w-24 h-24 flex items-center justify-center">
             <img 
-              src={campaign?.logo_url || venue.logo} 
-              alt={venue.brand}
+              src={campaign.logo_url} 
+              alt="Logo"
               className="w-full h-full object-contain"
             />
-          </div>
-        ) : (
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg" style={{ backgroundColor: venue.colors.primary }}>
-            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" style={{ color: venue.colors.accent }}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h15M8 3v3m4-3v3M5 6h12a2 2 0 012 2v10a4 4 0 01-4 4H7a4 4 0 01-4-4V8a2 2 0 012-2zm14 4h1a2 2 0 012 2v2a2 2 0 01-2 2h-1" />
-            </svg>
           </div>
         )}
 
         {/* Title */}
         <div className="space-y-3">
           <p className="text-sm font-medium tracking-[0.2em] uppercase" style={{ color: venue.colors.accent }}>
-            {campaign?.campaign_name || 'BACKSTREET POINTS CLUB'}
+            {campaign?.campaign_name || 'LOYALTY PROGRAM'}
           </p>
           <h1 className="text-3xl sm:text-4xl font-serif leading-tight" style={{ color: venue.colors.text }}>
-            Your {venue.brand.split(' ')[0]}
+            Your {campaign?.campaign_name ? campaign.campaign_name.replace(' POINTS CLUB', '').trim() : 'Rewards'}
           </h1>
           <h2 className="text-3xl sm:text-4xl font-serif italic" style={{ color: venue.colors.text }}>
             Rewards

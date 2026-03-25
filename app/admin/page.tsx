@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getVenueFromHostname, VenueConfig } from '@/lib/venues'
+import { useOwnerAuth } from '@/hooks/useOwnerAuth'
 
 interface MemberRow {
   id: string
@@ -80,15 +81,14 @@ interface InsightModal {
 }
 
 export default function AdminDashboard() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [password, setPassword] = useState('')
+  const { owner, currentVenue, setCurrentVenue, venues, loading: authLoading, isAuthenticated, logout, requireAuth } = useOwnerAuth()
   const [venue, setVenue] = useState<VenueConfig | null>(null)
   const [members, setMembers] = useState<MemberRow[]>([])
   const [checkIns, setCheckIns] = useState<CheckInRow[]>([])
   const [hourlyData, setHourlyData] = useState<HourlyData[]>([])
   const [dailyData, setDailyData] = useState<DailyData[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'activity' | 'redemptions' | 'campaign'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'activity' | 'redemptions' | 'campaign' | 'account'>('overview')
   const [totalRewardsClaimed, setTotalRewardsClaimed] = useState(0)
   const [redemptionRows, setRedemptionRows] = useState<RedemptionRow[]>([])
   const [campaignData, setCampaignData] = useState<CampaignData | null>(null)
@@ -103,6 +103,13 @@ export default function AdminDashboard() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
   const [insightModal, setInsightModal] = useState<InsightModal | null>(null)
+  const [showInvoices, setShowInvoices] = useState(false)
+  const [showPaymentMethod, setShowPaymentMethod] = useState(false)
+  const [isEditingAccount, setIsEditingAccount] = useState(false)
+  const [editedOwner, setEditedOwner] = useState({ full_name: '', email: '', phone: '' })
+  const [showAddLocation, setShowAddLocation] = useState(false)
+  const [newLocation, setNewLocation] = useState({ venue_name: '', subdomain: '' })
+  const [isAddingLocation, setIsAddingLocation] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -110,33 +117,43 @@ export default function AdminDashboard() {
     }
   }, [])
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Simple password check - in production use proper auth
-    if (password === 'admin123') {
-      setIsAuthenticated(true)
-      loadDashboardData()
-    } else {
-      alert('Invalid password')
+  useEffect(() => {
+    // Require authentication after auth check completes
+    if (!authLoading) {
+      requireAuth()
     }
-  }
+  }, [authLoading, requireAuth])
+
+  useEffect(() => {
+    // Load dashboard data when authenticated and venue is set
+    if (isAuthenticated && currentVenue) {
+      loadDashboardData()
+    }
+  }, [isAuthenticated, currentVenue])
 
   const loadDashboardData = async () => {
+    if (!currentVenue) return
+    
     setIsLoading(true)
     try {
-      // Load members
+      // Load members for this venue
       const { data: membersData } = await supabase
         .from('coffee_club_members')
         .select('*')
+        .eq('venue', currentVenue.venue_name)
         .order('created_at', { ascending: false })
 
-      // Load check-ins (last 30 days)
+      // Load check-ins (last 30 days) for this venue's members
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+      // Get member IDs for this venue
+      const memberIds = membersData?.map(m => m.id) || []
 
       const { data: checkInsData } = await supabase
         .from('check_ins')
         .select('*')
+        .in('member_id', memberIds.length > 0 ? memberIds : [''])
         .gte('checked_in_at', thirtyDaysAgo.toISOString())
         .order('checked_in_at', { ascending: false })
 
@@ -147,21 +164,22 @@ export default function AdminDashboard() {
         processDailyData(checkInsData)
       }
 
-      // Load redemptions
+      // Load redemptions for this venue's members
       const { data: redemptionsData } = await supabase
         .from('redemptions')
         .select('*')
+        .in('member_id', memberIds.length > 0 ? memberIds : [''])
         .order('redeemed_at', { ascending: false })
         .limit(100)
 
       if (redemptionsData) setRedemptionRows(redemptionsData)
       setTotalRewardsClaimed(redemptionsData?.length || 0)
 
-      // Load campaign settings
+      // Load campaign settings for this venue
       const { data: campData } = await supabase
         .from('loyalty_campaigns')
         .select('*')
-        .eq('venue_id', 'backstreet-cafe')
+        .eq('venue_id', currentVenue.id)
         .single()
 
       if (campData) {
@@ -234,44 +252,21 @@ export default function AdminDashboard() {
 
   if (!venue) return null
 
-  // Login screen
-  if (!isAuthenticated) {
+  // Show loading while checking auth
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: venue.colors.background }}>
-        <div className="w-full max-w-sm space-y-6">
-          <div className="text-center space-y-2">
-            {venue.logo && (
-              <div className="flex justify-center mb-4">
-                <img src={venue.logo} alt={venue.brand} className="w-16 h-16 object-contain" />
-              </div>
-            )}
-            <h1 className="text-2xl font-serif" style={{ color: venue.colors.text }}>Owner Dashboard</h1>
-            <p className="text-sm" style={{ color: venue.colors.textLight }}>Enter password to access</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2"
-              style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
-              autoFocus
-            />
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl text-white font-medium transition-all"
-              style={{ backgroundColor: venue.colors.primary }}
-            >
-              Login
-            </button>
-          </form>
-          <p className="text-xs text-center" style={{ color: venue.colors.textMuted }}>
-            Powered by MenuLove™
-          </p>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f5f5f0' }}>
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-gray-200 border-t-gray-800 rounded-full mx-auto mb-4"></div>
+          <p className="text-sm" style={{ color: '#8b8680' }}>Loading...</p>
         </div>
       </div>
     )
+  }
+
+  // Redirect happens in useEffect via requireAuth, don't block render
+  if (!isAuthenticated) {
+    return null
   }
 
   // Dashboard
@@ -281,28 +276,52 @@ export default function AdminDashboard() {
       <div className="px-6 py-4 shadow-sm" style={{ backgroundColor: 'white' }}>
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            {venue.logo && (
-              <img src={venue.logo} alt={venue.brand} className="w-10 h-10 object-contain" />
+            {currentVenue?.logo_url && (
+              <img src={currentVenue.logo_url} alt={currentVenue.venue_name} className="w-10 h-10 object-contain" />
             )}
             <div>
-              <h1 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>{venue.brand}</h1>
+              <h1 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>
+                {currentVenue?.venue_name || venue.brand}
+              </h1>
               <p className="text-xs" style={{ color: venue.colors.textLight }}>Owner Dashboard</p>
             </div>
           </div>
-          <button
-            onClick={() => setIsAuthenticated(false)}
-            className="text-sm px-4 py-2 rounded-lg transition-colors"
-            style={{ color: venue.colors.textLight }}
-          >
-            Logout
-          </button>
+          
+          <div className="flex items-center gap-3">
+            {/* Venue Selector - only show if owner has multiple venues */}
+            {venues.length > 1 && currentVenue && (
+              <select
+                value={currentVenue.id}
+                onChange={(e) => {
+                  const selected = venues.find(v => v.id === e.target.value)
+                  if (selected) setCurrentVenue(selected)
+                }}
+                className="px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+              >
+                {venues.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.venue_name}
+                  </option>
+                ))}
+              </select>
+            )}
+            
+            <button
+              onClick={logout}
+              className="text-sm px-4 py-2 rounded-lg transition-colors hover:bg-gray-100"
+              style={{ color: venue.colors.textLight }}
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         {/* Tabs */}
         <div className="flex gap-2 flex-wrap">
-          {(['overview', 'members', 'activity', 'redemptions', 'campaign'] as const).map(tab => (
+          {(['overview', 'members', 'activity', 'redemptions', 'campaign', 'account'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -312,7 +331,7 @@ export default function AdminDashboard() {
                 color: activeTab === tab ? 'white' : venue.colors.text,
               }}
             >
-              {tab === 'campaign' ? 'Campaign Settings' : tab}
+              {tab === 'campaign' ? 'Campaign Settings' : tab === 'account' ? 'Account & Billing' : tab}
             </button>
           ))}
         </div>
@@ -929,9 +948,21 @@ export default function AdminDashboard() {
 
                 {/* Branding */}
                 <div className="bg-white rounded-2xl p-6 shadow space-y-4">
-                  <div>
-                    <h3 className="font-medium text-lg" style={{ color: venue.colors.text }}>Branding</h3>
-                    <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>Your logo appears on the landing page, check-in, and rewards screens.</p>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-medium text-lg" style={{ color: venue.colors.text }}>Branding</h3>
+                      <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>Your logo appears on the landing page, check-in, and rewards screens.</p>
+                    </div>
+                    <button
+                      onClick={() => window.open('/qr-display', '_blank')}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+                      style={{ backgroundColor: venue.colors.accent, color: 'white' }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                      </svg>
+                      Preview QR Display
+                    </button>
                   </div>
 
                   {/* Logo Preview */}
@@ -988,24 +1019,43 @@ export default function AdminDashboard() {
                                 reader.onload = async (ev) => {
                                   const dataUrl = ev.target?.result as string
                                   setCampaignData({ ...campaignData, logo_url: dataUrl })
-                                  // Log to venue_logos
-                                  await supabase.from('venue_logos').insert({
-                                    venue_id: venue.id,
-                                    file_name: file.name,
-                                    file_url: dataUrl.substring(0, 100) + '...',
-                                  })
+                                  
+                                  // Save to venues table immediately
+                                  if (currentVenue) {
+                                    await supabase
+                                      .from('venues')
+                                      .update({ logo_url: dataUrl })
+                                      .eq('id', currentVenue.id)
+                                  }
+                                  
+                                  // Also save to campaign
+                                  await supabase
+                                    .from('loyalty_campaigns')
+                                    .update({ logo_url: dataUrl })
+                                    .eq('id', campaignData.id)
                                 }
                                 reader.readAsDataURL(file)
                               } else {
                                 const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName)
                                 const publicUrl = urlData.publicUrl
                                 setCampaignData({ ...campaignData, logo_url: publicUrl })
-                                // Log to venue_logos
-                                await supabase.from('venue_logos').insert({
-                                  venue_id: venue.id,
-                                  file_name: file.name,
-                                  file_url: publicUrl,
-                                })
+                                
+                                // Save to venues table immediately
+                                if (currentVenue) {
+                                  await supabase
+                                    .from('venues')
+                                    .update({ logo_url: publicUrl })
+                                    .eq('id', currentVenue.id)
+                                  
+                                  // Update local state
+                                  setCurrentVenue({ ...currentVenue, logo_url: publicUrl })
+                                }
+                                
+                                // Also save to campaign
+                                await supabase
+                                  .from('loyalty_campaigns')
+                                  .update({ logo_url: publicUrl })
+                                  .eq('id', campaignData.id)
                               }
                             } catch (err) {
                               console.error('Upload error:', err)
@@ -1066,15 +1116,26 @@ export default function AdminDashboard() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Campaign Name</label>
+                      <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Business Name</label>
                       <input
                         type="text"
-                        value={campaignData.campaign_name}
-                        onChange={(e) => setCampaignData({ ...campaignData, campaign_name: e.target.value })}
+                        value={campaignData.campaign_name.replace(' POINTS CLUB', '')}
+                        onChange={(e) => {
+                          const businessName = e.target.value
+                          setCampaignData({ ...campaignData, campaign_name: businessName ? `${businessName} POINTS CLUB` : '' })
+                        }}
+                        onBlur={(e) => {
+                          // Trim only on blur to clean up extra spaces
+                          const businessName = e.target.value.trim()
+                          setCampaignData({ ...campaignData, campaign_name: businessName ? `${businessName} POINTS CLUB` : '' })
+                        }}
+                        placeholder="Enter your business name"
                         className="w-full mt-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 text-sm"
                         style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
                       />
-                      <p className="text-[11px] mt-1" style={{ color: venue.colors.textMuted }}>Shown as the title on the landing page.</p>
+                      <p className="text-[11px] mt-1" style={{ color: venue.colors.textMuted }}>
+                        Will appear as "Your [Business Name] Rewards" on the landing page. "POINTS CLUB" is added automatically.
+                      </p>
                     </div>
                     <div>
                       <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Points Per Check-in</label>
@@ -1097,8 +1158,11 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-medium text-lg" style={{ color: venue.colors.text }}>Reward Tiers</h3>
-                      <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>
-                        Create up to 4 rewards. Customers unlock them as they earn points.
+                      <p className="text-xs mt-0.5 leading-relaxed" style={{ color: venue.colors.textMuted }}>
+                        Create up to 4 rewards. Customers earn {campaignData.points_per_checkin} points per check-in (once per day) and unlock rewards as they accumulate points. 
+                        <span className="block mt-1 italic">
+                          Example: Set rewards at 50, 100, 150, and 200 points. A customer checking in daily will unlock their first reward after {Math.ceil(50 / campaignData.points_per_checkin)} visits.
+                        </span>
                       </p>
                     </div>
                     <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ backgroundColor: venue.colors.background, color: venue.colors.textMuted }}>
@@ -1235,9 +1299,16 @@ export default function AdminDashboard() {
                   onClick={async () => {
                     setIsSaving(true)
                     setSaveMessage('')
+                    
+                    // Safety timeout - reset saving state after 10 seconds
+                    const timeoutId = setTimeout(() => {
+                      setIsSaving(false)
+                      setSaveMessage('Save timeout - please try again')
+                    }, 10000)
+                    
                     try {
-                      // Update campaign
-                      await supabase
+                      // 1. Update campaign
+                      const { error: campaignError } = await supabase
                         .from('loyalty_campaigns')
                         .update({
                           campaign_name: campaignData.campaign_name,
@@ -1246,52 +1317,42 @@ export default function AdminDashboard() {
                         })
                         .eq('id', campaignData.id)
 
-                      // Handle rewards: update existing, create new, delete removed
-                      const existingIds = rewardsData.filter(r => !r.id.startsWith('new-')).map(r => r.id)
+                      if (campaignError) throw campaignError
 
-                      // Delete rewards that were removed
-                      const { data: currentRewards } = await supabase
-                        .from('loyalty_rewards')
-                        .select('id')
-                        .eq('campaign_id', campaignData.id)
+                      // 2. Process rewards in parallel batches
+                      const existingRewards = rewardsData.filter(r => !r.id.startsWith('new-'))
+                      const newRewards = rewardsData.filter(r => r.id.startsWith('new-'))
 
-                      if (currentRewards) {
-                        for (const cr of currentRewards) {
-                          if (!existingIds.includes(cr.id)) {
-                            await supabase.from('loyalty_rewards').delete().eq('id', cr.id)
-                          }
-                        }
-                      }
-
-                      // Update existing and create new rewards
-                      for (let i = 0; i < rewardsData.length; i++) {
-                        const reward = rewardsData[i]
-                        if (reward.id.startsWith('new-')) {
-                          // Create new reward
-                          await supabase.from('loyalty_rewards').insert({
-                            campaign_id: campaignData.id,
+                      // Update existing rewards
+                      const updatePromises = existingRewards.map((reward, i) => 
+                        supabase
+                          .from('loyalty_rewards')
+                          .update({
                             name: reward.name,
                             points_required: reward.points_required,
                             description: reward.description,
                             active: reward.active,
-                            sort_order: i + 1,
+                            sort_order: rewardsData.indexOf(reward) + 1,
                           })
-                        } else {
-                          // Update existing reward
-                          await supabase
-                            .from('loyalty_rewards')
-                            .update({
-                              name: reward.name,
-                              points_required: reward.points_required,
-                              description: reward.description,
-                              active: reward.active,
-                              sort_order: i + 1,
-                            })
-                            .eq('id', reward.id)
-                        }
-                      }
+                          .eq('id', reward.id)
+                      )
 
-                      // Reload rewards to get real IDs for newly created ones
+                      // Create new rewards
+                      const insertPromises = newRewards.map((reward, i) => 
+                        supabase.from('loyalty_rewards').insert({
+                          campaign_id: campaignData.id,
+                          name: reward.name,
+                          points_required: reward.points_required,
+                          description: reward.description,
+                          active: reward.active,
+                          sort_order: rewardsData.indexOf(reward) + 1,
+                        })
+                      )
+
+                      // Execute all in parallel
+                      await Promise.all([...updatePromises, ...insertPromises])
+
+                      // Reload rewards
                       const { data: freshRewards } = await supabase
                         .from('loyalty_rewards')
                         .select('*')
@@ -1300,11 +1361,13 @@ export default function AdminDashboard() {
 
                       if (freshRewards) setRewardsData(freshRewards)
 
+                      clearTimeout(timeoutId)
                       setSaveMessage('Settings saved successfully!')
                       setTimeout(() => setSaveMessage(''), 3000)
-                    } catch (err) {
+                    } catch (err: any) {
+                      clearTimeout(timeoutId)
                       console.error('Save error:', err)
-                      setSaveMessage('Error saving settings.')
+                      setSaveMessage(`Error: ${err.message || 'Failed to save settings'}`)
                     } finally {
                       setIsSaving(false)
                     }
@@ -1476,6 +1539,245 @@ export default function AdminDashboard() {
                 </div>
               )
             })()}
+
+            {/* Account & Billing Tab */}
+            {activeTab === 'account' && owner && (
+              <div className="space-y-6">
+                {/* Account Overview */}
+                <div className="bg-white rounded-2xl p-6 shadow space-y-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-medium text-lg mb-1" style={{ color: venue.colors.text }}>Account Information</h3>
+                      <p className="text-xs" style={{ color: venue.colors.textMuted }}>Manage your account details and subscription</p>
+                    </div>
+                    {!isEditingAccount ? (
+                      <button
+                        onClick={() => {
+                          setIsEditingAccount(true)
+                          setEditedOwner({
+                            full_name: owner.full_name,
+                            email: owner.email,
+                            phone: owner.phone || ''
+                          })
+                        }}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-all hover:bg-gray-50"
+                        style={{ borderColor: venue.colors.textMuted, color: venue.colors.accent }}
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsEditingAccount(false)}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-all hover:bg-gray-50"
+                          style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from('venue_owners')
+                                .update({
+                                  full_name: editedOwner.full_name,
+                                  email: editedOwner.email,
+                                  phone: editedOwner.phone || null
+                                })
+                                .eq('id', owner.id)
+                              
+                              if (error) throw error
+                              
+                              setIsEditingAccount(false)
+                              window.location.reload()
+                            } catch (err) {
+                              console.error('Update error:', err)
+                              alert('Failed to update account')
+                            }
+                          }}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg transition-all hover:opacity-90"
+                          style={{ backgroundColor: venue.colors.primary, color: 'white' }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Owner Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Full Name</label>
+                      {isEditingAccount ? (
+                        <input
+                          type="text"
+                          value={editedOwner.full_name}
+                          onChange={(e) => setEditedOwner({ ...editedOwner, full_name: e.target.value })}
+                          className="w-full mt-1 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                          style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                        />
+                      ) : (
+                        <p className="mt-1 text-sm font-medium" style={{ color: venue.colors.text }}>{owner.full_name}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Email</label>
+                      {isEditingAccount ? (
+                        <input
+                          type="email"
+                          value={editedOwner.email}
+                          onChange={(e) => setEditedOwner({ ...editedOwner, email: e.target.value })}
+                          className="w-full mt-1 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                          style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                        />
+                      ) : (
+                        <p className="mt-1 text-sm font-medium" style={{ color: venue.colors.text }}>{owner.email}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Phone</label>
+                      {isEditingAccount ? (
+                        <input
+                          type="tel"
+                          value={editedOwner.phone}
+                          onChange={(e) => setEditedOwner({ ...editedOwner, phone: e.target.value })}
+                          placeholder="+61491706580"
+                          className="w-full mt-1 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                          style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                        />
+                      ) : (
+                        <p className="mt-1 text-sm font-medium" style={{ color: venue.colors.text }}>{owner.phone || '-'}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Active Locations</label>
+                      <p className="mt-1 text-sm font-medium" style={{ color: venue.colors.text }}>{venues.length} {venues.length === 1 ? 'location' : 'locations'}</p>
+                    </div>
+                  </div>
+
+                  {/* Add New Location Button */}
+                  <div className="pt-4 border-t" style={{ borderColor: '#e5e7eb' }}>
+                    <button
+                      onClick={() => {
+                        setShowAddLocation(true)
+                        setNewLocation({ venue_name: '', subdomain: '' })
+                      }}
+                      className="w-full py-3 rounded-xl font-medium border-2 border-dashed transition-all hover:bg-gray-50"
+                      style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                    >
+                      + Add New Location
+                    </button>
+                    <p className="text-[11px] text-center mt-2" style={{ color: venue.colors.textMuted }}>
+                      Each additional location is $29.90/month
+                    </p>
+                  </div>
+                </div>
+
+                {/* Subscription Info */}
+                <div className="bg-white rounded-2xl p-6 shadow space-y-6">
+                  <div>
+                    <h3 className="font-medium text-lg mb-1" style={{ color: venue.colors.text }}>Subscription & Billing</h3>
+                    <p className="text-xs" style={{ color: venue.colors.textMuted }}>Your current plan and payment details</p>
+                  </div>
+
+                  {/* Current Plan */}
+                  <div className="p-4 rounded-xl" style={{ backgroundColor: venue.colors.background }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: venue.colors.text }}>Current Plan</p>
+                        <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>Professional</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold" style={{ color: venue.colors.primary }}>$29.90</p>
+                        <p className="text-xs" style={{ color: venue.colors.textMuted }}>per location/month</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pt-3 border-t" style={{ borderColor: '#e5e7eb' }}>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#10b981', color: 'white' }}>
+                        14 DAYS FREE TRIAL
+                      </span>
+                      <p className="text-xs" style={{ color: venue.colors.textMuted }}>Active until trial ends</p>
+                    </div>
+                  </div>
+
+                  {/* Billing Details */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#e5e7eb' }}>
+                      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Total Locations</span>
+                      <span className="text-sm font-medium" style={{ color: venue.colors.text }}>{venues.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#e5e7eb' }}>
+                      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Monthly Total</span>
+                      <span className="text-sm font-medium" style={{ color: venue.colors.text }}>${(29.90 * venues.length).toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Next Billing Date</span>
+                      <span className="text-sm font-medium" style={{ color: venue.colors.text }}>
+                        {new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Features Included */}
+                  <div className="pt-4 border-t" style={{ borderColor: '#e5e7eb' }}>
+                    <p className="text-xs font-medium uppercase tracking-wide mb-3" style={{ color: venue.colors.textMuted }}>Included Features</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {[
+                        'Unlimited members',
+                        'Analytics & insights',
+                        'Email notifications',
+                        'Custom branding',
+                        'QR code display',
+                        'Multi-location support'
+                      ].map((feature, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5" style={{ color: '#10b981' }}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="text-xs" style={{ color: venue.colors.text }}>{feature}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t" style={{ borderColor: '#e5e7eb' }}>
+                    <button
+                      onClick={() => setShowPaymentMethod(true)}
+                      className="flex-1 py-3 rounded-xl font-medium transition-all hover:opacity-90"
+                      style={{ backgroundColor: venue.colors.primary, color: 'white' }}
+                    >
+                      Manage Payment Method
+                    </button>
+                    <button
+                      onClick={() => setShowInvoices(true)}
+                      className="flex-1 py-3 rounded-xl font-medium border transition-all hover:bg-gray-50"
+                      style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                    >
+                      View Billing History
+                    </button>
+                  </div>
+                </div>
+
+                {/* Support */}
+                <div className="bg-white rounded-2xl p-6 shadow">
+                  <h3 className="font-medium text-lg mb-3" style={{ color: venue.colors.text }}>Need Help?</h3>
+                  <p className="text-sm mb-4" style={{ color: venue.colors.textLight }}>
+                    Our support team is here to help you get the most out of your loyalty program.
+                  </p>
+                  <a
+                    href="mailto:contact@menulove.com.au"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+                    style={{ backgroundColor: venue.colors.accent, color: 'white' }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Contact Support
+                  </a>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1772,6 +2074,273 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Modal */}
+      {showPaymentMethod && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>Payment Method</h3>
+                <button
+                  onClick={() => setShowPaymentMethod(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-all"
+                  style={{ color: '#6b7280' }}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="p-4 rounded-xl border-2 border-dashed" style={{ borderColor: venue.colors.textMuted }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-8 rounded flex items-center justify-center" style={{ backgroundColor: '#1a1f71' }}>
+                    <span className="text-white text-xs font-bold">VISA</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: venue.colors.text }}>•••• •••• •••• 4242</p>
+                    <p className="text-xs" style={{ color: venue.colors.textMuted }}>Expires 12/25</p>
+                  </div>
+                </div>
+                <p className="text-xs" style={{ color: venue.colors.textMuted }}>
+                  This is a demo card. In production, you'll connect to Stripe for real payment processing.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => alert('Stripe integration coming soon! You will be able to update your payment method securely.')}
+                  className="w-full py-3 rounded-xl font-medium transition-all hover:opacity-90"
+                  style={{ backgroundColor: venue.colors.primary, color: 'white' }}
+                >
+                  Update Payment Method
+                </button>
+                <button
+                  onClick={() => setShowPaymentMethod(false)}
+                  className="w-full py-3 rounded-xl font-medium border transition-all hover:bg-gray-50"
+                  style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoices Modal */}
+      {showInvoices && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b sticky top-0 bg-white">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>Billing History</h3>
+                <button
+                  onClick={() => setShowInvoices(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-all"
+                  style={{ color: '#6b7280' }}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* Trial Notice */}
+              <div className="p-4 rounded-xl" style={{ backgroundColor: '#f0fdf4', borderLeft: '4px solid #10b981' }}>
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" style={{ color: '#10b981' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: '#065f46' }}>Free Trial Active</p>
+                    <p className="text-xs mt-1" style={{ color: '#047857' }}>
+                      You're currently in your 14-day free trial. Your first invoice will be generated on {new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sample Invoices */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Upcoming Invoice</p>
+                
+                <div className="border rounded-xl p-4 hover:bg-gray-50 transition-all cursor-pointer">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: venue.colors.text }}>
+                        Invoice #{new Date().getFullYear()}-001
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>
+                        Due {new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold" style={{ color: venue.colors.text }}>
+                        ${(29.90 * venues.length).toFixed(2)}
+                      </p>
+                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                        Pending
+                      </span>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t" style={{ borderColor: '#e5e7eb' }}>
+                    <div className="flex items-center justify-between text-xs" style={{ color: venue.colors.textMuted }}>
+                      <span>{venues.length} location{venues.length !== 1 ? 's' : ''} × $29.90</span>
+                      <button
+                        onClick={() => alert('Invoice download coming soon!')}
+                        className="text-xs font-medium hover:underline"
+                        style={{ color: venue.colors.accent }}
+                      >
+                        Download PDF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-center pt-4" style={{ color: venue.colors.textMuted }}>
+                  No previous invoices. Your billing history will appear here after your trial ends.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowInvoices(false)}
+                className="w-full py-3 rounded-xl font-medium border transition-all hover:bg-gray-50"
+                style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Location Modal */}
+      {showAddLocation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold" style={{ color: venue.colors.text }}>Add New Location</h3>
+                <button
+                  onClick={() => setShowAddLocation(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-all"
+                  style={{ color: '#6b7280' }}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Venue Name</label>
+                <input
+                  type="text"
+                  value={newLocation.venue_name}
+                  onChange={(e) => setNewLocation({ ...newLocation, venue_name: e.target.value })}
+                  placeholder="e.g., Mooloo Brew - CBD"
+                  className="w-full mt-1.5 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                  style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: venue.colors.textMuted }}>Subdomain</label>
+                <input
+                  type="text"
+                  value={newLocation.subdomain}
+                  onChange={(e) => setNewLocation({ ...newLocation, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                  placeholder="e.g., mooloo-cbd"
+                  className="w-full mt-1.5 px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                  style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                />
+                <p className="text-[10px] mt-1" style={{ color: venue.colors.textMuted }}>
+                  This will be used for your location's URL: {newLocation.subdomain || 'subdomain'}.menulove.com.au
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg" style={{ backgroundColor: '#fef3c7' }}>
+                <p className="text-xs font-medium" style={{ color: '#92400e' }}>
+                  💰 Additional cost: $29.90/month
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <button
+                  onClick={async () => {
+                    if (!newLocation.venue_name || !newLocation.subdomain) {
+                      alert('Please fill in all fields')
+                      return
+                    }
+                    
+                    if (!owner) {
+                      alert('Owner not found')
+                      return
+                    }
+                    
+                    setIsAddingLocation(true)
+                    try {
+                      const { data, error } = await supabase
+                        .from('venues')
+                        .insert({
+                          id: newLocation.subdomain, // Use subdomain as ID
+                          owner_id: owner.id,
+                          venue_name: newLocation.venue_name,
+                          subdomain: newLocation.subdomain,
+                          active: true
+                        })
+                        .select()
+                        .single()
+                      
+                      if (error) throw error
+                      
+                      // Create default campaign for new venue
+                      await supabase
+                        .from('loyalty_campaigns')
+                        .insert({
+                          venue_id: data.id,
+                          campaign_name: `${newLocation.venue_name} Points Club`,
+                          points_per_checkin: 5,
+                          active: true
+                        })
+                      
+                      alert('Location added successfully!')
+                      setShowAddLocation(false)
+                      window.location.reload()
+                    } catch (err: any) {
+                      console.error('Add location error:', err)
+                      alert(err.message || 'Failed to add location')
+                    } finally {
+                      setIsAddingLocation(false)
+                    }
+                  }}
+                  disabled={isAddingLocation}
+                  className="w-full py-3 rounded-xl font-medium transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: venue.colors.primary, color: 'white' }}
+                >
+                  {isAddingLocation ? 'Adding...' : 'Add Location'}
+                </button>
+                <button
+                  onClick={() => setShowAddLocation(false)}
+                  disabled={isAddingLocation}
+                  className="w-full py-3 rounded-xl font-medium border transition-all hover:bg-gray-50"
+                  style={{ borderColor: venue.colors.textMuted, color: venue.colors.text }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
