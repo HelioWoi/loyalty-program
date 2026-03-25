@@ -82,7 +82,7 @@ export async function fetchCampaign(venueId?: string): Promise<LoyaltyCampaign> 
 
 // Fetch rewards for a campaign
 export async function fetchRewards(campaignId: string): Promise<LoyaltyReward[]> {
-  if (!campaignId) return DEFAULT_REWARDS
+  if (!campaignId) return []
 
   const { data, error } = await supabase
     .from('loyalty_rewards')
@@ -91,10 +91,12 @@ export async function fetchRewards(campaignId: string): Promise<LoyaltyReward[]>
     .eq('active', true)
     .order('sort_order', { ascending: true })
 
-  if (error || !data || data.length === 0) {
-    console.log('Using default rewards')
-    return DEFAULT_REWARDS
+  if (error || !data) {
+    console.error('Error fetching rewards:', error)
+    return []
   }
+  
+  // Return only what's configured in database - empty array if nothing configured
   return data
 }
 

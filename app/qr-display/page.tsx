@@ -20,15 +20,44 @@ export default function QRDisplayPage() {
       const venueConfig = getVenueFromHostname(hostname)
       setVenue(venueConfig)
 
+      const params = new URLSearchParams(window.location.search)
+      const venueIdParam = params.get('venue')
+
       // Load campaign and rewards from database
       const loadData = async () => {
-        // Fetch first active venue from database
-        const { data: venueData } = await supabase
-          .from('venues')
-          .select('id, venue_name, logo_url')
-          .eq('active', true)
-          .limit(1)
-          .single()
+        let venueData: any = null
+
+        if (venueIdParam) {
+          // Load specific venue by ID (from admin preview)
+          const { data } = await supabase
+            .from('venues')
+            .select('id, venue_name, logo_url, subdomain')
+            .eq('id', venueIdParam)
+            .single()
+          venueData = data
+        } else {
+          // Try to load venue by subdomain from hostname
+          const subdomain = hostname.split('.')[0]
+          const { data: subdomainVenue } = await supabase
+            .from('venues')
+            .select('id, venue_name, logo_url, subdomain')
+            .eq('subdomain', subdomain)
+            .eq('active', true)
+            .single()
+          
+          if (subdomainVenue) {
+            venueData = subdomainVenue
+          } else {
+            // Fallback: load first active venue
+            const { data: firstVenue } = await supabase
+              .from('venues')
+              .select('id, venue_name, logo_url, subdomain')
+              .eq('active', true)
+              .limit(1)
+              .single()
+            venueData = firstVenue
+          }
+        }
 
         if (venueData) {
           const camp = await fetchCampaign(venueData.id)
@@ -36,7 +65,9 @@ export default function QRDisplayPage() {
           
           if (camp.id) {
             const rews = await fetchRewards(camp.id)
-            setRewards(rews)
+            // Only show active rewards configured by owner
+            const activeRewards = rews.filter(r => r.active === true)
+            setRewards(activeRewards)
           }
 
           // Generate time-based token (changes every hour)
@@ -44,10 +75,9 @@ export default function QRDisplayPage() {
             const currentHour = new Date().toISOString().slice(0, 13)
             const token = btoa(currentHour + venueData.id).slice(0, 16)
             
-            // Use venue_name to generate correct subdomain URL
-            const hostname = window.location.hostname
+            // Build correct subdomain URL
             const domain = hostname.includes('localhost') ? 'localhost:3000' : hostname.replace(/^[^.]+\./, '')
-            const subdomain = venueData.venue_name.toLowerCase().replace(/\s+/g, '')
+            const subdomain = venueData.subdomain || venueData.venue_name.toLowerCase().replace(/\s+/g, '')
             const baseUrl = `${window.location.protocol}//${subdomain}.${domain}`
             
             const url = `${baseUrl}/?action=checkin&token=${token}`
@@ -135,13 +165,17 @@ export default function QRDisplayPage() {
             />
           </div>
           <p className="text-xs" style={{ color: venue.colors.textLight }}>
-            Every check-in = {campaign?.points_per_checkin || 5} points. The more you visit, the more you unlock.
+            Already registered? Scan QR code or click Join Us.
           </p>
         </div>
 
         {/* Join Us Button */}
         <button
-          onClick={() => router.push('/')}
+          onClick={() => {
+            // Use relative path to preserve subdomain
+            const currentOrigin = window.location.origin
+            window.location.href = `${currentOrigin}/jointheclub`
+          }}
           className="w-full max-w-xs px-6 py-3 rounded-xl font-semibold text-base transition-all hover:opacity-90 shadow-lg"
           style={{ backgroundColor: venue.colors.primary, color: 'white' }}
         >

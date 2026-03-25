@@ -1016,9 +1016,13 @@ export default function AdminDashboard() {
 
                   <div className="space-y-3">
                     {venues.map((v) => {
+                      const subdomain = v.subdomain || v.venue_name.toLowerCase().replace(/\s+/g, '')
+                      const domain = typeof window !== 'undefined' && window.location.hostname.includes('localhost') 
+                        ? 'localhost:3000' 
+                        : 'menulove.com.au'
                       const signupUrl = typeof window !== 'undefined' 
-                        ? `${window.location.protocol}//${v.subdomain}.${window.location.hostname.replace(/^[^.]+\./, '')}` 
-                        : `https://${v.subdomain}.menulove.com.au`
+                        ? `${window.location.protocol}//${subdomain}.${domain}/qr-display` 
+                        : `https://${subdomain}.menulove.com.au/qr-display`
                       
                       return (
                         <div key={v.id} className="p-4 rounded-xl border" style={{ borderColor: '#e5e7eb', backgroundColor: '#fafafa' }}>
@@ -1074,7 +1078,7 @@ export default function AdminDashboard() {
                       <p className="text-xs mt-0.5" style={{ color: venue.colors.textMuted }}>Your logo appears on the landing page, check-in, and rewards screens.</p>
                     </div>
                     <button
-                      onClick={() => window.open('/qr-display', '_blank')}
+                      onClick={() => window.open(`/qr-display?venue=${currentVenue?.id}`, '_blank')}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
                       style={{ backgroundColor: venue.colors.accent, color: 'white' }}
                     >
@@ -1249,20 +1253,29 @@ export default function AdminDashboard() {
                           const fullCampaignName = businessName ? `${businessName} POINTS CLUB` : ''
                           setCampaignData({ ...campaignData, campaign_name: fullCampaignName })
                           
-                          // Save to database and sync with venue_name
+                          // Save to database and sync with venue_name and subdomain
                           if (businessName && currentVenue) {
                             try {
+                              // Generate subdomain from business name
+                              const subdomain = businessName.toLowerCase().replace(/\s+/g, '')
+                              
                               // Update campaign
                               await supabase
                                 .from('loyalty_campaigns')
                                 .update({ campaign_name: fullCampaignName })
                                 .eq('id', campaignData.id)
                               
-                              // Sync venue_name
+                              // Sync venue_name and subdomain
                               await supabase
                                 .from('venues')
-                                .update({ venue_name: businessName })
+                                .update({ 
+                                  venue_name: businessName,
+                                  subdomain: subdomain
+                                })
                                 .eq('id', currentVenue.id)
+                              
+                              // Update local state to reflect new subdomain
+                              setCurrentVenue({ ...currentVenue, venue_name: businessName, subdomain: subdomain })
                             } catch (err) {
                               console.error('Save error:', err)
                             }
@@ -1436,16 +1449,12 @@ export default function AdminDashboard() {
                 {/* Save Button */}
                 <button
                   onClick={async () => {
+                    console.log('=== SAVE STARTED ===')
                     setIsSaving(true)
                     setSaveMessage('')
                     
-                    // Safety timeout - reset saving state after 10 seconds
-                    const timeoutId = setTimeout(() => {
-                      setIsSaving(false)
-                      setSaveMessage('Save timeout - please try again')
-                    }, 10000)
-                    
                     try {
+                      console.log('1. Updating campaign...', campaignData)
                       // 1. Update campaign
                       const { error: campaignError } = await supabase
                         .from('loyalty_campaigns')
@@ -1456,15 +1465,22 @@ export default function AdminDashboard() {
                         })
                         .eq('id', campaignData.id)
 
-                      if (campaignError) throw campaignError
+                      if (campaignError) {
+                        console.error('Campaign update error:', campaignError)
+                        throw campaignError
+                      }
+                      console.log('Campaign updated successfully')
 
                       // 2. Process rewards in parallel batches
+                      console.log('2. Processing rewards...', rewardsData)
                       const existingRewards = rewardsData.filter(r => !r.id.startsWith('new-'))
                       const newRewards = rewardsData.filter(r => r.id.startsWith('new-'))
+                      console.log('Existing rewards:', existingRewards.length, 'New rewards:', newRewards.length)
 
                       // Update existing rewards
-                      const updatePromises = existingRewards.map((reward, i) => 
-                        supabase
+                      const updatePromises = existingRewards.map((reward, i) => {
+                        console.log('Updating reward:', reward.id, reward.name)
+                        return supabase
                           .from('loyalty_rewards')
                           .update({
                             name: reward.name,
@@ -1474,11 +1490,12 @@ export default function AdminDashboard() {
                             sort_order: rewardsData.indexOf(reward) + 1,
                           })
                           .eq('id', reward.id)
-                      )
+                      })
 
                       // Create new rewards
-                      const insertPromises = newRewards.map((reward, i) => 
-                        supabase.from('loyalty_rewards').insert({
+                      const insertPromises = newRewards.map((reward, i) => {
+                        console.log('Inserting new reward:', reward.name)
+                        return supabase.from('loyalty_rewards').insert({
                           campaign_id: campaignData.id,
                           name: reward.name,
                           points_required: reward.points_required,
@@ -1486,11 +1503,14 @@ export default function AdminDashboard() {
                           active: reward.active,
                           sort_order: rewardsData.indexOf(reward) + 1,
                         })
-                      )
+                      })
 
+                      console.log('3. Executing all promises...')
                       // Execute all in parallel
-                      await Promise.all([...updatePromises, ...insertPromises])
+                      const results = await Promise.all([...updatePromises, ...insertPromises])
+                      console.log('All promises completed:', results)
 
+                      console.log('4. Reloading rewards...')
                       // Reload rewards
                       const { data: freshRewards } = await supabase
                         .from('loyalty_rewards')
@@ -1498,17 +1518,17 @@ export default function AdminDashboard() {
                         .eq('campaign_id', campaignData.id)
                         .order('sort_order', { ascending: true })
 
+                      console.log('Fresh rewards loaded:', freshRewards)
                       if (freshRewards) setRewardsData(freshRewards)
 
-                      clearTimeout(timeoutId)
+                      console.log('=== SAVE COMPLETED ===')
+                      setIsSaving(false)
                       setSaveMessage('Settings saved successfully!')
                       setTimeout(() => setSaveMessage(''), 3000)
                     } catch (err: any) {
-                      clearTimeout(timeoutId)
-                      console.error('Save error:', err)
-                      setSaveMessage(`Error: ${err.message || 'Failed to save settings'}`)
-                    } finally {
+                      console.error('=== SAVE ERROR ===', err)
                       setIsSaving(false)
+                      setSaveMessage(`Error: ${err.message || 'Failed to save settings'}`)
                     }
                   }}
                   disabled={isSaving}

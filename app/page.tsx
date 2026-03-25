@@ -47,11 +47,30 @@ export default function Home() {
         return
       }
 
-      // Handle QR code scan: ?action=checkin&token=xxx
+      // Handle URL parameters
       const params = new URLSearchParams(window.location.search)
       const action = params.get('action')
       const token = params.get('token')
+      const screen = params.get('screen')
+      const source = params.get('source')
+
+      // Store source for later use in signup
+      if (source) {
+        sessionStorage.setItem('signup_source', source)
+      }
+
+      // Handle ?screen=signup → go directly to Join the Club
+      if (screen === 'signup') {
+        window.history.replaceState({}, '', window.location.pathname)
+        if (isMember && member) {
+          setCurrentScreen('checkin')
+        } else {
+          setCurrentScreen('signup')
+        }
+        return
+      }
       
+      // Handle QR code scan: ?action=checkin&token=xxx
       if (action === 'checkin' && token) {
         // Validate token (timestamp-based: token should be current hour)
         const currentHour = new Date().toISOString().slice(0, 13) // YYYY-MM-DDTHH
@@ -61,17 +80,15 @@ export default function Home() {
           // Valid QR scan - store token to trigger check-in
           setQrToken(token)
           
-          // Clean URL without reloading
-          window.history.replaceState({}, '', window.location.pathname)
-          
           if (isMember && member) {
             // Already logged in → go directly to check-in page
             console.log('User already logged in:', member.email)
+            window.history.replaceState({}, '', window.location.pathname)
             setCurrentScreen('checkin')
           } else {
-            // Not logged in → show signup form
-            console.log('User not logged in, showing signup form')
-            setCurrentScreen('signup')
+            // Not logged in → redirect to Join the Club page
+            console.log('User not logged in, redirecting to /jointheclub')
+            window.location.href = '/jointheclub'
           }
         } else {
           // Invalid or expired token
@@ -120,7 +137,10 @@ export default function Home() {
         .single()
 
       if (existingMember && !checkError) {
-        // Email exists - auto login
+        // Email exists - check if from QR scan or button
+        const signupSource = sessionStorage.getItem('signup_source')
+        sessionStorage.removeItem('signup_source') // Clear after use
+        
         console.log('Email found, logging in existing member:', existingMember.full_name)
         const memberData: MemberData = {
           id: existingMember.id,
@@ -132,13 +152,20 @@ export default function Home() {
         }
         login(memberData)
         
-        // If QR token exists, go directly to check-in
-        if (qrToken) {
+        if (signupSource === 'button') {
+          // From Join Us button - alert and redirect to QR display
+          alert('This email is already registered! Please scan the QR code at checkout to earn points.')
+          window.location.href = '/qr-display'
+          return
+        } else if (qrToken) {
+          // From QR scan with token - go directly to check-in
           setCurrentScreen('checkin')
+          return
         } else {
+          // Default - show success page
           setCurrentScreen('success')
+          return
         }
-        return
       }
 
       // Email doesn't exist - create new account
@@ -179,6 +206,8 @@ export default function Home() {
             points: retryMember.points || 0,
           }
           login(memberData)
+          // New account - go directly to check-in
+          setCurrentScreen('checkin')
         }
       } else if (insertData && insertData[0]) {
         // Success - login new member
@@ -191,13 +220,8 @@ export default function Home() {
           points: insertData[0].points || 0,
         }
         login(newMember)
-      }
-
-      // If QR token exists, go directly to check-in
-      if (qrToken) {
+        // New account - go directly to check-in for first check-in
         setCurrentScreen('checkin')
-      } else {
-        setCurrentScreen('success')
       }
     } catch (error) {
       console.error('Signup error:', error)
@@ -206,7 +230,8 @@ export default function Home() {
   }
 
   const handleDone = () => {
-    setCurrentScreen(isMember ? 'checkin' : 'landing')
+    // Always go to landing - user must scan QR code to check-in
+    setCurrentScreen('landing')
   }
 
   // Show institutional landing page for main domain
