@@ -64,8 +64,18 @@ export default function RewardsPage({ member, venueId, onBack, onClaimReward }: 
       })
     }
 
-    // Load campaign + reward statuses
-    const camp = await fetchCampaign()
+    // Load campaign + rewards - resolve venueId from database if needed
+    let resolvedVenueId = venueId
+    if (!resolvedVenueId || resolvedVenueId === 'backstreet-cafe') {
+      const { data: vData } = await supabase
+        .from('venues')
+        .select('id')
+        .eq('active', true)
+        .limit(1)
+        .single()
+      if (vData) resolvedVenueId = vData.id
+    }
+    const camp = await fetchCampaign(resolvedVenueId)
     setCampaign(camp)
     const statuses = await getRewardsWithStatus(member.id, freshPoints, camp.id)
     setRewardStatuses(statuses)

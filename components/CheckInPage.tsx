@@ -51,8 +51,18 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
         console.log('Fresh member data:', freshMember)
       }
 
-      // Load campaign + rewards
-      const camp = await fetchCampaign()
+      // Load campaign + rewards - resolve venueId from database if needed
+      let resolvedVenueId = venueId
+      if (!resolvedVenueId || resolvedVenueId === 'backstreet-cafe') {
+        const { data: vData } = await supabase
+          .from('venues')
+          .select('id')
+          .eq('active', true)
+          .limit(1)
+          .single()
+        if (vData) resolvedVenueId = vData.id
+      }
+      const camp = await fetchCampaign(resolvedVenueId)
       setCampaign(camp)
       const rews = await fetchRewards(camp.id)
       setRewards(rews)

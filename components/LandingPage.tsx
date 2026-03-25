@@ -8,9 +8,11 @@ import { supabase } from '@/lib/supabase'
 
 interface LandingPageProps {
   venueId?: string
+  member?: any
+  onViewRewards?: () => void
 }
 
-export default function LandingPage({ venueId }: LandingPageProps) {
+export default function LandingPage({ venueId, member, onViewRewards }: LandingPageProps) {
   const venue = useVenue(venueId)
   const [qrUrl, setQrUrl] = useState('')
   const [campaign, setCampaign] = useState<LoyaltyCampaign | null>(null)

@@ -1016,13 +1016,11 @@ export default function AdminDashboard() {
 
                   <div className="space-y-3">
                     {venues.map((v) => {
-                      const subdomain = v.subdomain || v.venue_name.toLowerCase().replace(/\s+/g, '')
-                      const domain = typeof window !== 'undefined' && window.location.hostname.includes('localhost') 
-                        ? 'localhost:3000' 
-                        : 'menulove.com.au'
-                      const signupUrl = typeof window !== 'undefined' 
-                        ? `${window.location.protocol}//${subdomain}.${domain}/qr-display` 
-                        : `https://${subdomain}.menulove.com.au/qr-display`
+                      // Use venue parameter for multi-tenant support (works without subdomain configuration)
+                      const baseUrl = typeof window !== 'undefined' 
+                        ? `${window.location.protocol}//${window.location.host}` 
+                        : 'https://menulove.com.au'
+                      const signupUrl = `${baseUrl}/qr-display?venue=${v.id}`
                       
                       return (
                         <div key={v.id} className="p-4 rounded-xl border" style={{ borderColor: '#e5e7eb', backgroundColor: '#fafafa' }}>

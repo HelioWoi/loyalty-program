@@ -16,7 +16,7 @@ type Screen = 'landing' | 'signup' | 'success' | 'checkin' | 'rewards'
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
-  const [venueId, setVenueId] = useState<string>('backstreet-cafe')
+  const [venueId, setVenueId] = useState<string>('')
   const [qrToken, setQrToken] = useState<string | null>(null)
   const [isMainDomain, setIsMainDomain] = useState(false)
   const { member, isMember, isLoading, login, updateMember } = useAuth()
@@ -27,19 +27,34 @@ export default function Home() {
       
       const hostname = window.location.hostname
       
-      // Check if this is the main domain (no subdomain or localhost)
-      const isMain = hostname === 'menulove-rewards.netlify.app' || 
-                     hostname === 'localhost' ||
-                     hostname === '127.0.0.1' ||
-                     !hostname.includes('.')
+      // Check if this is the main domain (only production main domain)
+      const isMain = hostname === 'menulove.com.au' || 
+                     hostname === 'menulove-rewards.netlify.app'
       
       setIsMainDomain(isMain)
       
       // If main domain, don't process venue-specific logic
       if (isMain) return
       
+      // Try to get venue from hostname first
       const venue = getVenueFromHostname(hostname)
-      setVenueId(venue.id)
+      let actualVenueId = venue.id
+      
+      // If still using default/hardcoded ID, fetch from database
+      if (!actualVenueId || actualVenueId === 'backstreet-cafe') {
+        const { data: venueData } = await supabase
+          .from('venues')
+          .select('id')
+          .eq('active', true)
+          .limit(1)
+          .single()
+        
+        if (venueData) {
+          actualVenueId = venueData.id
+        }
+      }
+      
+      setVenueId(actualVenueId)
 
       // Wait for auth to finish loading before processing QR scan
       if (isLoading) {
@@ -53,10 +68,16 @@ export default function Home() {
       const token = params.get('token')
       const screen = params.get('screen')
       const source = params.get('source')
+      const venueParam = params.get('venue')
 
       // Store source for later use in signup
       if (source) {
         sessionStorage.setItem('signup_source', source)
+      }
+
+      // If venue parameter exists, load that venue (for multi-tenant QR codes)
+      if (venueParam) {
+        sessionStorage.setItem('qr_venue_id', venueParam)
       }
 
       // Handle ?screen=signup → go directly to Join the Club
@@ -115,7 +136,12 @@ export default function Home() {
 
   const handleCheckInSuccess = (updatedMember: MemberData) => {
     updateMember(updatedMember)
-    // Stay on check-in page - user navigates to rewards manually
+    // Stay on check-in page after check-in completes
+    setCurrentScreen('checkin')
+  }
+
+  const handleBackToCheckin = () => {
+    setCurrentScreen('checkin')
   }
 
   const handleClaimReward = (updatedMember: MemberData) => {
@@ -230,26 +256,41 @@ export default function Home() {
   }
 
   const handleDone = () => {
-    // Always go to landing - user must scan QR code to check-in
-    setCurrentScreen('landing')
+    // Go to check-in to maintain locked flow between checkin and rewards
+    setCurrentScreen('checkin')
   }
 
-  // Show institutional landing page for main domain
-  if (isMainDomain) {
+  // Check if URL has venue-specific params - if so, never show institutional page
+  const hasVenueParams = typeof window !== 'undefined' && 
+    (window.location.search.includes('screen=signup') || 
+     window.location.search.includes('action=checkin') ||
+     window.location.search.includes('source=button'))
+
+  // Show institutional landing page ONLY for production main domain with NO venue params
+  if (isMainDomain && !hasVenueParams) {
     return <InstitutionalLanding />
+  }
+
+  // Don't render until venueId is loaded
+  if (!venueId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f0]">
+        <p className="text-lg text-gray-600">Loading...</p>
+      </div>
+    )
+  }
+
+  // If somehow currentScreen is 'landing', change to 'checkin' to maintain locked flow
+  if (currentScreen === 'landing') {
+    setCurrentScreen('checkin')
   }
 
   return (
     <>
-      {currentScreen === 'landing' && (
-        <LandingPage 
-          venueId={venueId} 
-        />
-      )}
       {currentScreen === 'signup' && (
         <SignupForm 
           onSubmit={handleSignupSubmit} 
-          onBack={handleBack} 
+          onBack={handleBackToCheckin} 
           venueId={venueId} 
         />
       )}
