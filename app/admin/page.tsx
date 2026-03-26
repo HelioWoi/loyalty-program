@@ -83,6 +83,23 @@ interface InsightModal {
 export default function AdminDashboard() {
   const { owner, currentVenue, setCurrentVenue, venues, loading: authLoading, isAuthenticated, logout, requireAuth } = useOwnerAuth()
   const [venue, setVenue] = useState<VenueConfig | null>(null)
+
+  // Helper to get venue colors safely
+  const getVenueColors = () => {
+    if (currentVenue?.brand_colors) {
+      return currentVenue.brand_colors
+    }
+    // Fallback colors
+    return {
+      primary: '#3b82f6',
+      secondary: '#6b7280',
+      accent: '#3b82f6',
+      background: '#f8fafc',
+      text: '#111827',
+      textLight: '#6b7280',
+      textMuted: '#9ca3af'
+    }
+  }
   const [members, setMembers] = useState<MemberRow[]>([])
   const [checkIns, setCheckIns] = useState<CheckInRow[]>([])
   const [hourlyData, setHourlyData] = useState<HourlyData[]>([])
@@ -100,6 +117,8 @@ export default function AdminDashboard() {
   const [redemptionPage, setRedemptionPage] = useState(1)
   const [memberPage, setMemberPage] = useState(1)
   const [memberSearch, setMemberSearch] = useState('')
+  const [memberToDelete, setMemberToDelete] = useState<MemberRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
   const [insightModal, setInsightModal] = useState<InsightModal | null>(null)
@@ -127,37 +146,72 @@ export default function AdminDashboard() {
   useEffect(() => {
     // Load dashboard data when authenticated and venue is set
     if (isAuthenticated && currentVenue) {
-      loadDashboardData()
+      loadAdminData()
     }
   }, [isAuthenticated, currentVenue])
 
-  const loadDashboardData = async () => {
+  const loadMembers = async () => {
     if (!currentVenue) return
     
-    setIsLoading(true)
     try {
-      // Load members for this venue
       const { data: membersData } = await supabase
         .from('coffee_club_members')
         .select('*')
         .eq('venue', currentVenue.venue_name)
         .order('created_at', { ascending: false })
 
+      if (membersData) setMembers(membersData)
+    } catch (error) {
+      console.error('Error loading members:', error)
+    }
+  }
+
+  const loadAdminData = async () => {
+    if (!currentVenue) return
+    
+    setIsLoading(true)
+    try {
+      // Load members first (needed for check-in queries)
+      const { data: membersData } = await supabase
+        .from('coffee_club_members')
+        .select('*')
+        .eq('venue', currentVenue.venue_name)
+        .order('created_at', { ascending: false })
+
+      if (membersData) setMembers(membersData)
+      
+      const mIds = membersData?.map(m => m.id) || []
+      
+      // Load check-ins and campaign in parallel
+      await Promise.all([
+        loadCheckIns(mIds),
+        loadCampaignData()
+      ])
+    } catch (error) {
+      console.error('Error loading admin data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loadCheckIns = async (memberIds?: string[]) => {
+    if (!currentVenue) return
+    
+    try {
       // Load check-ins (last 30 days) for this venue's members
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      // Get member IDs for this venue
-      const memberIds = membersData?.map(m => m.id) || []
+      // Use passed IDs or fallback to current members state
+      const ids = memberIds || members?.map(m => m.id) || []
 
       const { data: checkInsData } = await supabase
         .from('check_ins')
         .select('*')
-        .in('member_id', memberIds.length > 0 ? memberIds : [''])
+        .in('member_id', ids.length > 0 ? ids : [''])
         .gte('checked_in_at', thirtyDaysAgo.toISOString())
         .order('checked_in_at', { ascending: false })
 
-      if (membersData) setMembers(membersData)
       if (checkInsData) {
         setCheckIns(checkInsData)
         processHourlyData(checkInsData)
@@ -168,13 +222,21 @@ export default function AdminDashboard() {
       const { data: redemptionsData } = await supabase
         .from('redemptions')
         .select('*')
-        .in('member_id', memberIds.length > 0 ? memberIds : [''])
+        .in('member_id', ids.length > 0 ? ids : [''])
         .order('redeemed_at', { ascending: false })
         .limit(100)
 
       if (redemptionsData) setRedemptionRows(redemptionsData)
       setTotalRewardsClaimed(redemptionsData?.length || 0)
+    } catch (error) {
+      console.error('Error loading check-ins:', error)
+    }
+  }
 
+  const loadCampaignData = async () => {
+    if (!currentVenue) return
+    
+    try {
       // Load campaign settings for this venue
       const { data: campData } = await supabase
         .from('loyalty_campaigns')
@@ -193,10 +255,8 @@ export default function AdminDashboard() {
 
         if (rewsData) setRewardsData(rewsData)
       }
-    } catch (err) {
-      console.error('Error loading dashboard:', err)
-    } finally {
-      setIsLoading(false)
+    } catch (error) {
+      console.error('Error loading campaign data:', error)
     }
   }
 
@@ -727,21 +787,32 @@ export default function AdminDashboard() {
                               <tr key={m.id} className="hover:bg-gray-50 transition-colors">
                                 <td colSpan={5} className="p-0">
                                   <div className="flex items-center px-4 py-2.5">
-                                    <div className="flex-1 text-sm font-medium" style={{ color: venue.colors.text }}>{m.full_name}</div>
-                                    <div className="hidden sm:block flex-1 text-xs" style={{ color: venue.colors.textLight }}>{m.email}</div>
+                                    <div className="flex-1 text-sm font-medium" style={{ color: getVenueColors().text }}>{m.full_name}</div>
+                                    <div className="hidden sm:block flex-1 text-xs" style={{ color: getVenueColors().textLight }}>{m.email}</div>
                                     <div className="w-16 text-center">
-                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: venue.colors.accent }}>
+                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: getVenueColors().accent }}>
                                         {m.points || 0}
                                       </span>
                                     </div>
-                                    <div className="w-14 text-xs text-center" style={{ color: venue.colors.textLight }}>{m.visits_count}</div>
-                                    <div className="w-24 text-right">
+                                    <div className="w-14 text-xs text-center" style={{ color: getVenueColors().textLight }}>{m.visits_count}</div>
+                                    <div className="w-40 text-right flex items-center justify-end gap-2">
                                       <button
                                         onClick={() => setExpandedMemberId(isExpanded ? null : m.id)}
-                                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-all hover:bg-gray-50"
-                                        style={{ borderColor: isExpanded ? venue.colors.accent : venue.colors.textMuted, color: isExpanded ? venue.colors.accent : venue.colors.textLight }}
+                                        className="text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-all hover:bg-gray-50 whitespace-nowrap"
+                                        style={{ 
+                                          borderColor: isExpanded ? getVenueColors().accent : '#e5e7eb', 
+                                          color: isExpanded ? getVenueColors().accent : '#6b7280'
+                                        }}
                                       >
-                                        {isExpanded ? 'Close' : 'See details'}
+                                        {isExpanded ? 'Close' : 'Details'}
+                                      </button>
+                                      <button
+                                        onClick={() => setMemberToDelete(m)}
+                                        className="text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-all hover:bg-red-50 whitespace-nowrap"
+                                        style={{ borderColor: '#ef4444', color: '#ef4444' }}
+                                        title="Delete member"
+                                      >
+                                        Delete
                                       </button>
                                     </div>
                                   </div>
@@ -1128,7 +1199,7 @@ export default function AdminDashboard() {
                             setIsUploadingLogo(true)
                             try {
                               const ext = file.name.split('.').pop()
-                              const fileName = `${venue.id}-logo-${Date.now()}.${ext}`
+                              const fileName = `${currentVenue?.id || 'venue'}-logo-${Date.now()}.${ext}`
 
                               // Upload to Supabase storage
                               const { data: uploadData, error: uploadError } = await supabase.storage
@@ -1136,11 +1207,12 @@ export default function AdminDashboard() {
                                 .upload(fileName, file, { upsert: true })
 
                               if (uploadError) {
+                                console.warn('Storage upload failed, using base64 fallback:', uploadError.message)
                                 // Fallback: convert to base64 data URL
                                 const reader = new FileReader()
                                 reader.onload = async (ev) => {
                                   const dataUrl = ev.target?.result as string
-                                  setCampaignData({ ...campaignData, logo_url: dataUrl })
+                                  setCampaignData(prev => prev ? { ...prev, logo_url: dataUrl } : prev)
                                   
                                   // Save to venues table immediately
                                   if (currentVenue) {
@@ -1155,8 +1227,17 @@ export default function AdminDashboard() {
                                     .from('loyalty_campaigns')
                                     .update({ logo_url: dataUrl })
                                     .eq('id', campaignData.id)
+                                  
+                                  setIsUploadingLogo(false)
+                                  setSaveMessage('Logo uploaded successfully!')
+                                  setTimeout(() => setSaveMessage(''), 3000)
+                                }
+                                reader.onerror = () => {
+                                  setIsUploadingLogo(false)
+                                  alert('Failed to read file')
                                 }
                                 reader.readAsDataURL(file)
+                                return // Don't hit finally yet - FileReader is async
                               } else {
                                 const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName)
                                 const publicUrl = urlData.publicUrl
@@ -1178,9 +1259,13 @@ export default function AdminDashboard() {
                                   .from('loyalty_campaigns')
                                   .update({ logo_url: publicUrl })
                                   .eq('id', campaignData.id)
+                                
+                                setSaveMessage('Logo uploaded successfully!')
+                                setTimeout(() => setSaveMessage(''), 3000)
                               }
                             } catch (err) {
                               console.error('Upload error:', err)
+                              alert('Failed to upload logo: ' + (err as any)?.message)
                             } finally {
                               setIsUploadingLogo(false)
                             }
@@ -2558,6 +2643,90 @@ export default function AdminDashboard() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Member Confirmation Modal */}
+      {memberToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isDeleting && setMemberToDelete(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md border-2 border-amber-200 bg-amber-50">
+            <div className="flex justify-center pt-6">
+              <div className="p-3 rounded-full bg-amber-50 border border-amber-200">
+                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+            </div>
+            <div className="px-6 py-4 text-center">
+              <h3 className="text-lg font-semibold mb-2 text-amber-900">Delete Member</h3>
+              <p className="text-sm text-amber-700 leading-relaxed">
+                Are you sure you want to delete &quot;{memberToDelete.full_name}&quot;? This will permanently remove all their data including check-ins and rewards.
+              </p>
+            </div>
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => setMemberToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 rounded-xl font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setIsDeleting(true)
+                  try {
+                    console.log('Deleting member:', memberToDelete.id, memberToDelete.full_name)
+                    
+                    // Try RPC first (bypasses RLS)
+                    const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_member_cascade', {
+                      p_member_id: memberToDelete.id
+                    })
+                    
+                    if (rpcError) {
+                      console.warn('RPC delete failed, trying direct delete:', rpcError.message)
+                      // Fallback: direct deletes
+                      await supabase.from('check_ins').delete().eq('member_id', memberToDelete.id)
+                      await supabase.from('redemptions').delete().eq('member_id', memberToDelete.id)
+                      const { error } = await supabase.from('coffee_club_members').delete().eq('id', memberToDelete.id)
+                      if (error) throw error
+                    }
+                    
+                    // Verify deletion
+                    const { data: verify } = await supabase
+                      .from('coffee_club_members')
+                      .select('id')
+                      .eq('id', memberToDelete.id)
+                      .maybeSingle()
+                    
+                    if (verify) {
+                      console.error('Member still exists after delete! RLS may be blocking.')
+                      throw new Error('Delete blocked by database permissions. Please run the migration SQL in Supabase Dashboard.')
+                    }
+                    
+                    // Update local state immediately (no need to re-fetch)
+                    setMembers(prev => prev.filter(m => m.id !== memberToDelete.id))
+                    setCheckIns(prev => prev.filter(ci => ci.member_id !== memberToDelete.id))
+                    setRedemptionRows(prev => prev.filter(r => r.member_id !== memberToDelete.id))
+                    setMemberToDelete(null)
+                    setExpandedMemberId(null)
+                    console.log('Member deleted successfully')
+                    setSaveMessage('Member deleted successfully!')
+                    setTimeout(() => setSaveMessage(''), 3000)
+                  } catch (err) {
+                    console.error('Delete member error:', err)
+                    alert('Failed to delete member: ' + (err as any)?.message)
+                  } finally {
+                    setIsDeleting(false)
+                  }
+                }}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 rounded-xl font-medium transition-all bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
         </div>

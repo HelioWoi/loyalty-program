@@ -134,17 +134,24 @@ export function useOwnerAuth() {
   const logout = useCallback(async () => {
     console.log('Logout clicked - starting logout process')
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error('Logout error:', error)
-        throw error
-      }
+      // Clear local state first
+      setUser(null)
+      setOwner(null)
+      setVenues([])
+      setCurrentVenue(null)
+      setIsAuthenticated(false)
+      
+      await supabase.auth.signOut()
       console.log('Logout successful - redirecting to login')
-      router.push('/owner-login')
+      
+      // Use window.location for reliable redirect (router.push can fail after signOut)
+      window.location.href = '/owner-login'
     } catch (err) {
       console.error('Logout failed:', err)
+      // Force redirect even if signOut fails
+      window.location.href = '/owner-login'
     }
-  }, [router])
+  }, [])
 
   const requireAuth = useCallback(() => {
     if (!loading && !isAuthenticated) {

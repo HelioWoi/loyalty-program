@@ -21,8 +21,9 @@ export default function Home() {
   const [isMainDomain, setIsMainDomain] = useState(false)
   const { member, isMember, isLoading, login, updateMember } = useAuth()
 
+  // Step 1: Load venue immediately (no auth needed)
   useEffect(() => {
-    const handleQRScan = async () => {
+    const loadVenue = async () => {
       if (typeof window === 'undefined') return
       
       const hostname = window.location.hostname
@@ -32,8 +33,6 @@ export default function Home() {
                      hostname === 'menulove-rewards.netlify.app'
       
       setIsMainDomain(isMain)
-      
-      // If main domain, don't process venue-specific logic
       if (isMain) return
       
       // Try to get venue from hostname first
@@ -55,71 +54,66 @@ export default function Home() {
       }
       
       setVenueId(actualVenueId)
-
-      // Wait for auth to finish loading before processing QR scan
-      if (isLoading) {
-        console.log('Auth still loading, waiting...')
-        return
-      }
-
-      // Handle URL parameters
-      const params = new URLSearchParams(window.location.search)
-      const action = params.get('action')
-      const token = params.get('token')
-      const screen = params.get('screen')
-      const source = params.get('source')
-      const venueParam = params.get('venue')
-
-      // Store source for later use in signup
-      if (source) {
-        sessionStorage.setItem('signup_source', source)
-      }
-
-      // If venue parameter exists, load that venue (for multi-tenant QR codes)
-      if (venueParam) {
-        sessionStorage.setItem('qr_venue_id', venueParam)
-      }
-
-      // Handle ?screen=signup → go directly to Join the Club
-      if (screen === 'signup') {
-        window.history.replaceState({}, '', window.location.pathname)
-        if (isMember && member) {
-          setCurrentScreen('checkin')
-        } else {
-          setCurrentScreen('signup')
-        }
-        return
-      }
-      
-      // Handle QR code scan: ?action=checkin&token=xxx
-      if (action === 'checkin' && token) {
-        // Validate token (timestamp-based: token should be current hour)
-        const currentHour = new Date().toISOString().slice(0, 13) // YYYY-MM-DDTHH
-        const validToken = btoa(currentHour + venue.id).slice(0, 16)
-        
-        if (token === validToken) {
-          // Valid QR scan - store token to trigger check-in
-          setQrToken(token)
-          
-          if (isMember && member) {
-            // Already logged in → go directly to check-in page
-            console.log('User already logged in:', member.email)
-            window.history.replaceState({}, '', window.location.pathname)
-            setCurrentScreen('checkin')
-          } else {
-            // Not logged in → redirect to Join the Club page
-            console.log('User not logged in, redirecting to /jointheclub')
-            window.location.href = '/jointheclub'
-          }
-        } else {
-          // Invalid or expired token
-          alert('Invalid or expired QR code. Please scan the current QR code at the venue.')
-          window.history.replaceState({}, '', window.location.pathname)
-        }
-      }
     }
     
-    handleQRScan()
+    loadVenue()
+  }, [])
+
+  // Step 2: Process URL params after auth is ready
+  useEffect(() => {
+    if (isLoading) return // Wait for auth
+    if (typeof window === 'undefined') return
+    
+    const params = new URLSearchParams(window.location.search)
+    const action = params.get('action')
+    const token = params.get('token')
+    const screen = params.get('screen')
+    const source = params.get('source')
+    const venueParam = params.get('venue')
+
+    // Store source for later use in signup
+    if (source) {
+      sessionStorage.setItem('signup_source', source)
+    }
+
+    // If venue parameter exists, load that venue (for multi-tenant QR codes)
+    if (venueParam) {
+      sessionStorage.setItem('qr_venue_id', venueParam)
+    }
+
+    // Handle ?screen=signup → go directly to Join the Club
+    if (screen === 'signup') {
+      window.history.replaceState({}, '', window.location.pathname)
+      if (isMember && member) {
+        setCurrentScreen('checkin')
+      } else {
+        setCurrentScreen('signup')
+      }
+      return
+    }
+    
+    // Handle QR code scan: ?action=checkin&token=xxx
+    if (action === 'checkin' && token) {
+      const venue = getVenueFromHostname(window.location.hostname)
+      const currentHour = new Date().toISOString().slice(0, 13)
+      const validToken = btoa(currentHour + venue.id).slice(0, 16)
+      
+      if (token === validToken) {
+        setQrToken(token)
+        
+        if (isMember && member) {
+          console.log('User already logged in:', member.email)
+          window.history.replaceState({}, '', window.location.pathname)
+          setCurrentScreen('checkin')
+        } else {
+          console.log('User not logged in, redirecting to /jointheclub')
+          window.location.href = '/jointheclub'
+        }
+      } else {
+        alert('Invalid or expired QR code. Please scan the current QR code at the venue.')
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
   }, [isMember, member, isLoading])
 
   const handleBack = () => {
@@ -280,9 +274,14 @@ export default function Home() {
     )
   }
 
-  // If somehow currentScreen is 'landing', change to 'checkin' to maintain locked flow
+  // If user is logged in and on landing, go to checkin
+  // If user is NOT logged in and on landing, show signup
   if (currentScreen === 'landing') {
-    setCurrentScreen('checkin')
+    if (isMember && member) {
+      setCurrentScreen('checkin')
+    } else {
+      setCurrentScreen('signup')
+    }
   }
 
   return (
