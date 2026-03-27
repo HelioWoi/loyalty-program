@@ -103,9 +103,18 @@ export default function Home() {
     
     // Handle QR code scan: ?action=checkin&token=xxx
     if (action === 'checkin' && token) {
-      const venue = getVenueFromHostname(window.location.hostname)
+      // Get venue ID from URL param or use current venueId
+      const venueParam = params.get('venue') || sessionStorage.getItem('qr_venue_id') || venueId
+      
+      if (!venueParam) {
+        alert('Invalid QR code: venue not specified.')
+        return
+      }
+      
       const currentHour = new Date().toISOString().slice(0, 13)
-      const validToken = btoa(currentHour + venue.id).slice(0, 16)
+      const validToken = btoa(currentHour + venueParam).slice(0, 16)
+      
+      console.log('QR validation:', { token, validToken, venueParam, currentHour })
       
       if (token === validToken) {
         setQrToken(token)

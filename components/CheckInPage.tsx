@@ -51,9 +51,15 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
         console.log('Fresh member data:', freshMember)
       }
 
-      // Load campaign + rewards - resolve venueId from database if needed
+      // Load campaign + rewards - use venue from QR token or sessionStorage
       let resolvedVenueId = venueId
-      if (!resolvedVenueId || resolvedVenueId === 'backstreet-cafe') {
+      
+      // Try to get venue from QR token flow first
+      const qrVenueId = sessionStorage.getItem('qr_venue_id')
+      if (qrVenueId) {
+        resolvedVenueId = qrVenueId
+      } else if (!resolvedVenueId || resolvedVenueId === 'backstreet-cafe') {
+        // Fallback to first active venue
         const { data: vData } = await supabase
           .from('venues')
           .select('id')
