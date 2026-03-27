@@ -124,10 +124,10 @@ export default function Home() {
           window.history.replaceState({}, '', window.location.pathname)
           setCurrentScreen('checkin')
         } else {
-          // Save QR token to sessionStorage before redirect (full page nav loses state)
+          // Save QR token to sessionStorage and redirect to signup flow
           sessionStorage.setItem('qr_token', token)
-          console.log('User not logged in, saving QR token and redirecting to /jointheclub')
-          window.location.href = '/jointheclub'
+          console.log('User not logged in, saving QR token and redirecting to signup')
+          window.location.href = '/?screen=signup'
         }
       } else {
         alert('Invalid or expired QR code. Please scan the current QR code at the venue.')
