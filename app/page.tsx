@@ -94,7 +94,12 @@ export default function Home() {
       }
       window.history.replaceState({}, '', window.location.pathname)
       if (isMember && member) {
-        setCurrentScreen('checkin')
+        // If user is member and has QR token, go to checkin
+        if (savedToken) {
+          setCurrentScreen('checkin')
+        } else {
+          setCurrentScreen('landing')
+        }
       } else {
         setCurrentScreen('signup')
       }
