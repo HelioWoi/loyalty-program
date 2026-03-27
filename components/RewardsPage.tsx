@@ -9,7 +9,8 @@ import { fetchCampaign, getRewardsWithStatus, redeemReward, fetchRedemptionHisto
 interface CheckIn {
   id: string
   checked_in_at: string
-  venue: string
+  venue?: string
+  venue_id?: string
 }
 
 interface RewardsPageProps {
@@ -121,7 +122,7 @@ export default function RewardsPage({ member, venueId, onBack, onClaimReward }: 
     try {
       const { data, error } = await supabase
         .from('check_ins')
-        .select('id, checked_in_at, venue')
+        .select('*')
         .eq('member_id', member.id)
         .order('checked_in_at', { ascending: false })
         .limit(10)
@@ -129,6 +130,7 @@ export default function RewardsPage({ member, venueId, onBack, onClaimReward }: 
       if (error) {
         console.error('Error loading check-ins:', error)
       } else {
+        console.log('Check-ins loaded:', data?.length, data)
         setRecentCheckIns(data || [])
       }
     } catch (err) {
@@ -364,10 +366,10 @@ export default function RewardsPage({ member, venueId, onBack, onClaimReward }: 
                     className="bg-white rounded-xl p-4 flex justify-between items-center shadow"
                   >
                     <div>
-                      <p className="font-medium" style={{ color: venue.colors.text }}>
-                        {checkIn.venue}
+                      <p className="font-medium text-sm" style={{ color: venue.colors.text }}>
+                        {checkIn.venue || venue.brand || 'Check-in'}
                       </p>
-                      <p className="text-sm" style={{ color: venue.colors.textLight }}>
+                      <p className="text-xs" style={{ color: venue.colors.textLight }}>
                         {day} · {time}
                       </p>
                       {relative && (

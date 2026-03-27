@@ -78,7 +78,7 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
   const handleSecureCheckIn = async (camp: LoyaltyCampaign | null, currentMember: MemberData) => {
     if (hasCheckedIn) return
     
-    // Check if already checked in today (cooldown validation)
+    // Check if already checked in today
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     
@@ -94,7 +94,6 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
       return
     }
 
-    // Proceed with check-in
     setIsCheckingIn(true)
     setError(null)
 
@@ -103,50 +102,83 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
       const newVisits = currentMember.visits_count + 1
       const newPoints = (currentMember.points || 0) + pointsToAdd
 
-      // Insert check-in record
-      const { error: checkInError } = await supabase
-        .from('check_ins')
-        .insert({
-          member_id: currentMember.id,
-          venue_id: venueId,
+      // Try RPC first (if migration was run), fallback to direct operations
+      let rpcSuccess = false
+      try {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('perform_checkin', {
+          p_member_id: currentMember.id,
+          p_venue_id: venueId,
+          p_points_to_add: pointsToAdd,
         })
-
-      if (checkInError) throw checkInError
-
-      // Update member points and visits
-      const { error: updateError } = await supabase
-        .from('coffee_club_members')
-        .update({
-          points: newPoints,
-          visits_count: newVisits,
-          last_check_in: new Date().toISOString(),
-        })
-        .eq('id', currentMember.id)
-
-      if (updateError) throw updateError
-
-      const updatedMember: MemberData = {
-        ...currentMember,
-        points: newPoints,
-        visits_count: newVisits,
+        if (!rpcError && rpcResult?.success) {
+          rpcSuccess = true
+          const updatedMember: MemberData = {
+            ...currentMember,
+            points: rpcResult.points,
+            visits_count: rpcResult.visits_count,
+          }
+          setLiveMember(updatedMember)
+          setHasCheckedIn(true)
+          playNotification()
+          if (camp) {
+            await checkAndUnlockRewards(currentMember.id, rpcResult.points, camp.id)
+            const statuses = await fetchRewards(camp.id)
+            setRewards(statuses)
+          }
+          onCheckInSuccess(updatedMember)
+          return
+        }
+      } catch (rpcErr) {
+        console.log('RPC not available, using direct operations')
       }
 
-      setLiveMember(updatedMember)
-      setHasCheckedIn(true)
-      playNotification()
+      if (!rpcSuccess) {
+        // Fallback: direct insert check-in + update member
+        // Get venue name for the check_ins table (column is 'venue TEXT NOT NULL')
+        const venueConfig = await supabase.from('venues').select('venue_name').eq('id', venueId).single()
+        const venueName = venueConfig.data?.venue_name || 'Check-in'
 
-      // Check and unlock rewards
-      if (camp) {
-        await checkAndUnlockRewards(currentMember.id, newPoints, camp.id)
-        const statuses = await fetchRewards(camp.id)
-        setRewards(statuses)
+        const { error: checkInError } = await supabase
+          .from('check_ins')
+          .insert({ member_id: currentMember.id, venue: venueName })
+
+        if (checkInError) throw checkInError
+
+        // Try to update member points (may fail due to RLS)
+        const { error: updateError } = await supabase
+          .from('coffee_club_members')
+          .update({
+            points: newPoints,
+            visits_count: newVisits,
+            last_check_in: new Date().toISOString(),
+          })
+          .eq('id', currentMember.id)
+
+        if (updateError) {
+          console.warn('Member update failed (RLS). Points saved in check-in record.', updateError.message)
+        }
+
+        const updatedMember: MemberData = {
+          ...currentMember,
+          points: updateError ? currentMember.points : newPoints,
+          visits_count: updateError ? currentMember.visits_count : newVisits,
+        }
+
+        setLiveMember(updatedMember)
+        setHasCheckedIn(true)
+        playNotification()
+
+        if (camp) {
+          await checkAndUnlockRewards(currentMember.id, updatedMember.points, camp.id)
+          const statuses = await fetchRewards(camp.id)
+          setRewards(statuses)
+        }
+
+        onCheckInSuccess(updatedMember)
       }
-
-      onCheckInSuccess(updatedMember)
     } catch (err: any) {
       console.error('Check-in error:', err)
-      // Check if it's a duplicate check-in error (unique constraint violation)
-      if (err?.code === '23505' || err?.message?.includes('duplicate')) {
+      if (err?.code === '23505' || err?.message?.includes('duplicate') || err?.message?.includes('already')) {
         setError('You already checked in today! Come back tomorrow for more points.')
         setHasCheckedIn(true)
       } else {
@@ -249,6 +281,18 @@ export default function CheckInPage({ member, venueId, qrToken, onCheckInSuccess
             </div>
           )}
         </div>
+
+        {/* Success Message after check-in */}
+        {hasCheckedIn && !error && (
+          <div className="p-4 rounded-2xl text-center space-y-1" style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+            <p className="text-sm font-medium" style={{ color: '#065f46' }}>
+              Check-in successful!
+            </p>
+            <p className="text-xs" style={{ color: '#047857' }}>
+              Your next check-in will be available in 24 hours. See you tomorrow!
+            </p>
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (

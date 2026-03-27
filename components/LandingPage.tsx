@@ -10,9 +10,10 @@ interface LandingPageProps {
   venueId?: string
   member?: any
   onViewRewards?: () => void
+  onJoin?: () => void
 }
 
-export default function LandingPage({ venueId, member, onViewRewards }: LandingPageProps) {
+export default function LandingPage({ venueId, member, onViewRewards, onJoin }: LandingPageProps) {
   const venue = useVenue(venueId)
   const [qrUrl, setQrUrl] = useState('')
   const [campaign, setCampaign] = useState<LoyaltyCampaign | null>(null)
@@ -116,6 +117,31 @@ export default function LandingPage({ venueId, member, onViewRewards }: LandingP
           </div>
         )}
 
+
+        {/* QR Code */}
+        {qrUrl && (
+          <div className="bg-white rounded-2xl p-5 shadow-md">
+            <QRCodeSVG value={qrUrl} size={200} />
+          </div>
+        )}
+
+        {/* Join Us Section */}
+        {onJoin && (
+          <div className="w-full space-y-3">
+            <p className="text-xs" style={{ color: venue.colors.textLight }}>
+              Already registered? Scan QR code or click Join Us.
+            </p>
+            <button
+              onClick={onJoin}
+              className="w-full text-white font-medium py-4 px-8 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl"
+              style={{ backgroundColor: venue.colors.primary }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = venue.colors.secondary}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = venue.colors.primary}
+            >
+              Join Us
+            </button>
+          </div>
+        )}
 
         {/* Footer */}
         <p className="text-xs tracking-wide mt-4" style={{ color: venue.colors.textMuted }}>

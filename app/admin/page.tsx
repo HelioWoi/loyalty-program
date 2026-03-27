@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getVenueFromHostname, VenueConfig } from '@/lib/venues'
 import { useOwnerAuth } from '@/hooks/useOwnerAuth'
@@ -781,21 +781,22 @@ export default function AdminDashboard() {
                           {memberSlice.map(m => {
                             const isExpanded = expandedMemberId === m.id
                             const memberCheckins = checkIns.filter(ci => ci.member_id === m.id)
+                            const realVisits = Math.max(memberCheckins.length, m.visits_count || 0)
                             const memberRedemptions = redemptionRows.filter(r => r.member_id === m.id)
                             const lastCheckin = memberCheckins.length > 0 ? new Date(memberCheckins[0].checked_in_at) : null
                             return (
-                              <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                                <td colSpan={5} className="p-0">
-                                  <div className="flex items-center px-4 py-2.5">
-                                    <div className="flex-1 text-sm font-medium" style={{ color: getVenueColors().text }}>{m.full_name}</div>
-                                    <div className="hidden sm:block flex-1 text-xs" style={{ color: getVenueColors().textLight }}>{m.email}</div>
-                                    <div className="w-16 text-center">
-                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: getVenueColors().accent }}>
-                                        {m.points || 0}
-                                      </span>
-                                    </div>
-                                    <div className="w-14 text-xs text-center" style={{ color: getVenueColors().textLight }}>{m.visits_count}</div>
-                                    <div className="w-40 text-right flex items-center justify-end gap-2">
+                              <React.Fragment key={m.id}>
+                                <tr className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-4 py-2.5 text-sm font-medium" style={{ color: getVenueColors().text }}>{m.full_name}</td>
+                                  <td className="px-4 py-2.5 text-xs hidden sm:table-cell" style={{ color: getVenueColors().textLight }}>{m.email}</td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: getVenueColors().accent }}>
+                                      {m.points || 0}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-center" style={{ color: getVenueColors().textLight }}>{realVisits}</td>
+                                  <td className="px-4 py-2.5 text-right">
+                                    <div className="flex items-center justify-end gap-2">
                                       <button
                                         onClick={() => setExpandedMemberId(isExpanded ? null : m.id)}
                                         className="text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-all hover:bg-gray-50 whitespace-nowrap"
@@ -815,9 +816,11 @@ export default function AdminDashboard() {
                                         Delete
                                       </button>
                                     </div>
-                                  </div>
-                                  {isExpanded && (
-                                    <div className="px-4 pb-4 pt-1">
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr>
+                                    <td colSpan={5} className="px-4 pb-4 pt-1">
                                       <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: venue.colors.background }}>
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                           <div>
@@ -825,8 +828,8 @@ export default function AdminDashboard() {
                                             <p className="text-lg font-serif" style={{ color: venue.colors.accent }}>{m.points || 0}</p>
                                           </div>
                                           <div>
-                                            <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: venue.colors.textMuted }}>Check-ins (30d)</p>
-                                            <p className="text-lg font-serif" style={{ color: venue.colors.text }}>{memberCheckins.length}</p>
+                                            <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: venue.colors.textMuted }}>Total Check-ins</p>
+                                            <p className="text-lg font-serif" style={{ color: venue.colors.text }}>{realVisits}</p>
                                           </div>
                                           <div>
                                             <p className="text-[10px] uppercase tracking-wide font-medium" style={{ color: venue.colors.textMuted }}>Rewards Redeemed</p>
@@ -847,7 +850,7 @@ export default function AdminDashboard() {
                                           <div className="flex-1">
                                             <p className="text-[10px] uppercase tracking-wide font-medium mb-1" style={{ color: venue.colors.textMuted }}>Last Check-in</p>
                                             <p className="text-xs" style={{ color: venue.colors.text }}>
-                                              {lastCheckin ? `${lastCheckin.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} at ${lastCheckin.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}` : 'None in last 30 days'}
+                                              {lastCheckin ? `${lastCheckin.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} at ${lastCheckin.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}` : 'No check-ins yet'}
                                             </p>
                                           </div>
                                           <div className="flex-1">
@@ -886,10 +889,10 @@ export default function AdminDashboard() {
                                           View all activity for {m.full_name}
                                         </button>
                                       </div>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             )
                           })}
                         </tbody>
@@ -1532,86 +1535,70 @@ export default function AdminDashboard() {
                 {/* Save Button */}
                 <button
                   onClick={async () => {
-                    console.log('=== SAVE STARTED ===')
+                    if (!campaignData) return
                     setIsSaving(true)
                     setSaveMessage('')
-                    
+
                     try {
-                      console.log('1. Updating campaign...', campaignData)
                       // 1. Update campaign
-                      const { error: campaignError } = await supabase
+                      console.log('Saving campaign:', campaignData.id)
+                      const campRes = await supabase
                         .from('loyalty_campaigns')
                         .update({
                           campaign_name: campaignData.campaign_name,
                           points_per_checkin: campaignData.points_per_checkin,
-                          updated_at: new Date().toISOString(),
                         })
                         .eq('id', campaignData.id)
+                        .select()
+                      
+                      console.log('Campaign result:', campRes)
+                      if (campRes.error) throw new Error(`Campaign: ${campRes.error.message}`)
 
-                      if (campaignError) {
-                        console.error('Campaign update error:', campaignError)
-                        throw campaignError
-                      }
-                      console.log('Campaign updated successfully')
-
-                      // 2. Process rewards in parallel batches
-                      console.log('2. Processing rewards...', rewardsData)
-                      const existingRewards = rewardsData.filter(r => !r.id.startsWith('new-'))
-                      const newRewards = rewardsData.filter(r => r.id.startsWith('new-'))
-                      console.log('Existing rewards:', existingRewards.length, 'New rewards:', newRewards.length)
-
-                      // Update existing rewards
-                      const updatePromises = existingRewards.map((reward, i) => {
-                        console.log('Updating reward:', reward.id, reward.name)
-                        return supabase
-                          .from('loyalty_rewards')
-                          .update({
+                      // 2. Save rewards
+                      for (let i = 0; i < rewardsData.length; i++) {
+                        const reward = rewardsData[i]
+                        if (reward.id.startsWith('new-')) {
+                          console.log('Inserting reward:', reward.name)
+                          const res = await supabase.from('loyalty_rewards').insert({
+                            campaign_id: campaignData.id,
                             name: reward.name,
                             points_required: reward.points_required,
-                            description: reward.description,
+                            description: reward.description || '',
                             active: reward.active,
-                            sort_order: rewardsData.indexOf(reward) + 1,
-                          })
-                          .eq('id', reward.id)
-                      })
+                            sort_order: i + 1,
+                          }).select()
+                          console.log('Insert result:', res)
+                          if (res.error) throw new Error(`Insert ${reward.name}: ${res.error.message}`)
+                        } else {
+                          console.log('Updating reward:', reward.id, reward.name)
+                          const res = await supabase.from('loyalty_rewards').update({
+                            name: reward.name,
+                            points_required: reward.points_required,
+                            description: reward.description || '',
+                            active: reward.active,
+                            sort_order: i + 1,
+                          }).eq('id', reward.id).select()
+                          console.log('Update result:', res)
+                          if (res.error) throw new Error(`Update ${reward.name}: ${res.error.message}`)
+                        }
+                      }
 
-                      // Create new rewards
-                      const insertPromises = newRewards.map((reward, i) => {
-                        console.log('Inserting new reward:', reward.name)
-                        return supabase.from('loyalty_rewards').insert({
-                          campaign_id: campaignData.id,
-                          name: reward.name,
-                          points_required: reward.points_required,
-                          description: reward.description,
-                          active: reward.active,
-                          sort_order: rewardsData.indexOf(reward) + 1,
-                        })
-                      })
-
-                      console.log('3. Executing all promises...')
-                      // Execute all in parallel
-                      const results = await Promise.all([...updatePromises, ...insertPromises])
-                      console.log('All promises completed:', results)
-
-                      console.log('4. Reloading rewards...')
-                      // Reload rewards
+                      // 3. Reload rewards
                       const { data: freshRewards } = await supabase
                         .from('loyalty_rewards')
                         .select('*')
                         .eq('campaign_id', campaignData.id)
                         .order('sort_order', { ascending: true })
-
-                      console.log('Fresh rewards loaded:', freshRewards)
                       if (freshRewards) setRewardsData(freshRewards)
 
-                      console.log('=== SAVE COMPLETED ===')
-                      setIsSaving(false)
                       setSaveMessage('Settings saved successfully!')
                       setTimeout(() => setSaveMessage(''), 3000)
                     } catch (err: any) {
-                      console.error('=== SAVE ERROR ===', err)
+                      console.error('Save error:', err)
+                      setSaveMessage(`Error: ${err.message || 'Failed to save'}`)
+                      setTimeout(() => setSaveMessage(''), 5000)
+                    } finally {
                       setIsSaving(false)
-                      setSaveMessage(`Error: ${err.message || 'Failed to save settings'}`)
                     }
                   }}
                   disabled={isSaving}

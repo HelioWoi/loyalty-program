@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase'
 import { SignupFormData } from '@/lib/types'
 import { getVenueFromHostname } from '@/lib/venues'
 import { useAuth, MemberData } from '@/hooks/useAuth'
+import { fetchCampaign } from '@/lib/loyalty'
+import { useNotificationSound } from '@/hooks/useNotificationSound'
 
 type Screen = 'landing' | 'signup' | 'success' | 'checkin' | 'rewards'
 
@@ -20,6 +22,7 @@ export default function Home() {
   const [qrToken, setQrToken] = useState<string | null>(null)
   const [isMainDomain, setIsMainDomain] = useState(false)
   const { member, isMember, isLoading, login, updateMember } = useAuth()
+  const { playNotification } = useNotificationSound()
 
   // Step 1: Load venue immediately (no auth needed)
   useEffect(() => {
@@ -83,6 +86,12 @@ export default function Home() {
 
     // Handle ?screen=signup → go directly to Join the Club
     if (screen === 'signup') {
+      // Restore QR token from sessionStorage (saved before redirect from QR scan)
+      const savedToken = sessionStorage.getItem('qr_token')
+      if (savedToken) {
+        setQrToken(savedToken)
+        // Don't remove yet - will be cleared after check-in
+      }
       window.history.replaceState({}, '', window.location.pathname)
       if (isMember && member) {
         setCurrentScreen('checkin')
@@ -106,7 +115,9 @@ export default function Home() {
           window.history.replaceState({}, '', window.location.pathname)
           setCurrentScreen('checkin')
         } else {
-          console.log('User not logged in, redirecting to /jointheclub')
+          // Save QR token to sessionStorage before redirect (full page nav loses state)
+          sessionStorage.setItem('qr_token', token)
+          console.log('User not logged in, saving QR token and redirecting to /jointheclub')
           window.location.href = '/jointheclub'
         }
       } else {
@@ -188,8 +199,15 @@ export default function Home() {
         }
       }
 
-      // Email doesn't exist - create new account
+      // Email doesn't exist - create new account WITH first check-in points
       console.log('Creating new account for:', data.email)
+      
+      // Fetch campaign to know points_per_checkin BEFORE creating member
+      const camp = await fetchCampaign(venueId)
+      const pointsToAdd = camp?.points_per_checkin || 5
+      console.log('Points per check-in from campaign:', pointsToAdd)
+      
+      // Create member already with first check-in points (avoids RLS UPDATE issue)
       const { data: insertData, error } = await supabase
         .from('coffee_club_members')
         .insert([
@@ -199,9 +217,10 @@ export default function Home() {
             source: 'MenuLove Powered',
             brand: venue.brand,
             venue: venue.name,
-            visits_count: 0,
-            reward_status: 'new',
-            points: 0,
+            visits_count: 1,
+            reward_status: 'active',
+            points: pointsToAdd,
+            last_check_in: new Date().toISOString(),
           },
         ])
         .select()
@@ -226,21 +245,40 @@ export default function Home() {
             points: retryMember.points || 0,
           }
           login(memberData)
-          // New account - go directly to check-in
           setCurrentScreen('checkin')
         }
       } else if (insertData && insertData[0]) {
-        // Success - login new member
+        const memberId = insertData[0].id
+        console.log('New member created with points:', pointsToAdd, 'ID:', memberId)
+        
+        // Also insert first check-in record (public can INSERT check_ins)
+        // Table has 'venue TEXT NOT NULL' column, not 'venue_id'
+        const { error: checkInError } = await supabase
+          .from('check_ins')
+          .insert({ member_id: memberId, venue: venue.name })
+        
+        if (checkInError) {
+          console.warn('First check-in record insert failed:', checkInError.message)
+        } else {
+          console.log('First check-in record created successfully')
+        }
+        
+        // Clear QR token so CheckInPage doesn't try another check-in
+        sessionStorage.removeItem('qr_token')
+        setQrToken(null)
+        
+        // Play success sound for first check-in
+        playNotification()
+        
         const newMember: MemberData = {
-          id: insertData[0].id,
+          id: memberId,
           email: insertData[0].email,
           full_name: insertData[0].full_name,
-          visits_count: insertData[0].visits_count || 0,
-          reward_status: insertData[0].reward_status || 'new',
-          points: insertData[0].points || 0,
+          visits_count: 1,
+          reward_status: 'active',
+          points: pointsToAdd,
         }
         login(newMember)
-        // New account - go directly to check-in for first check-in
         setCurrentScreen('checkin')
       }
     } catch (error) {
@@ -260,8 +298,28 @@ export default function Home() {
      window.location.search.includes('action=checkin') ||
      window.location.search.includes('source=button'))
 
-  // Show institutional landing page ONLY for production main domain with NO venue params
-  if (isMainDomain && !hasVenueParams) {
+  // Show institutional landing page for main domain OR localhost development
+  const isLocalhost = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || 
+     window.location.hostname === '127.0.0.1')
+  
+  // Prevent hydration mismatch by using useEffect to set the flag
+  const [shouldShowInstitutional, setShouldShowInstitutional] = useState(false)
+  
+  useEffect(() => {
+    const hasParams = typeof window !== 'undefined' && 
+      (window.location.search.includes('screen=signup') || 
+       window.location.search.includes('action=checkin') ||
+       window.location.search.includes('source=button'))
+    
+    const isLocal = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || 
+       window.location.hostname === '127.0.0.1')
+    
+    setShouldShowInstitutional((isMainDomain || isLocal) && !hasParams)
+  }, [isMainDomain])
+  
+  if (shouldShowInstitutional) {
     return <InstitutionalLanding />
   }
 
@@ -275,21 +333,23 @@ export default function Home() {
   }
 
   // If user is logged in and on landing, go to checkin
-  // If user is NOT logged in and on landing, show signup
-  if (currentScreen === 'landing') {
-    if (isMember && member) {
-      setCurrentScreen('checkin')
-    } else {
-      setCurrentScreen('signup')
-    }
+  // If user is NOT logged in, show LandingPage (QR code page)
+  if (currentScreen === 'landing' && isMember && member) {
+    setCurrentScreen('checkin')
   }
 
   return (
     <>
+      {currentScreen === 'landing' && (
+        <LandingPage
+          venueId={venueId}
+          onJoin={() => setCurrentScreen('signup')}
+        />
+      )}
       {currentScreen === 'signup' && (
         <SignupForm 
           onSubmit={handleSignupSubmit} 
-          onBack={handleBackToCheckin} 
+          onBack={handleBack} 
           venueId={venueId} 
         />
       )}
