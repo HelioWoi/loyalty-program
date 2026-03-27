@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QR Token Test</title>
+</head>
+<body>
+    <h1>QR Token Test</h1>
+    <button onclick="testToken()">Test Current Token</button>
+    <button onclick="generateLocalToken()">Generate Local Token</button>
+    <div id="result"></div>
+
+    <script>
+        function testToken() {
+            const venueId = 'backstreet-cafe'; // Test with hardcoded
+            const utcHour = new Date().toISOString().slice(0, 13);
+            const token = btoa(utcHour + venueId).slice(0, 16);
+            
+            const url = `http://localhost:3000/?action=checkin&token=${token}&venue=${venueId}`;
+            
+            document.getElementById('result').innerHTML = `
+                <h3>Test Token</h3>
+                <p><strong>UTC Hour:</strong> ${utcHour}</p>
+                <p><strong>Venue ID:</strong> ${venueId}</p>
+                <p><strong>Token:</strong> ${token}</p>
+                <p><strong>Test URL:</strong> <a href="${url}" target="_blank">${url}</a></p>
+                <p><strong>QR Code:</strong></p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}" />
+            `;
+        }
+        
+        function generateLocalToken() {
+            const venueId = 'backstreet-cafe';
+            const utcHour = new Date().toISOString().slice(0, 13);
+            const token = btoa(utcHour + venueId).slice(0, 16);
+            
+            const url = `http://localhost:3000/?action=checkin&token=${token}&venue=${venueId}`;
+            
+            // Open in new tab
+            window.open(url, '_blank');
+        }
+    </script>
+</body>
+</html>

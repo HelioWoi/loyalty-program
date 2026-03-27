@@ -28,13 +28,24 @@ export default function QRDisplayPage() {
         let venueData: any = null
 
         if (venueIdParam) {
-          // Load specific venue by ID (from admin preview)
-          const { data } = await supabase
-            .from('venues')
-            .select('id, venue_name, logo_url, subdomain')
-            .eq('id', venueIdParam)
-            .single()
-          venueData = data
+          // Check if it's a UUID or a venue name
+          if (venueIdParam.includes('-')) {
+            // It's a UUID, load by ID
+            const { data } = await supabase
+              .from('venues')
+              .select('id, venue_name, logo_url, subdomain')
+              .eq('id', venueIdParam)
+              .single()
+            venueData = data
+          } else {
+            // It's a venue name, load by name
+            const { data } = await supabase
+              .from('venues')
+              .select('id, venue_name, logo_url, subdomain')
+              .eq('venue_name', venueIdParam === 'backstreet-cafe' ? 'Backstreet Cafe' : venueIdParam)
+              .single()
+            venueData = data
+          }
         } else {
           // Try to load venue by subdomain from hostname
           const subdomain = hostname.split('.')[0]
@@ -48,14 +59,13 @@ export default function QRDisplayPage() {
           if (subdomainVenue) {
             venueData = subdomainVenue
           } else {
-            // Fallback: load first active venue
-            const { data: firstVenue } = await supabase
-              .from('venues')
-              .select('id, venue_name, logo_url, subdomain')
-              .eq('active', true)
-              .limit(1)
-              .single()
-            venueData = firstVenue
+            // Default venue for development
+            venueData = {
+              id: 'backstreet-cafe',
+              venue_name: 'Backstreet Cafe',
+              logo_url: 'https://nuwmbaohgwuanvzotbef.supabase.co/storage/v1/object/public/media/logo.png',
+              subdomain: 'backstreet'
+            }
           }
         }
 

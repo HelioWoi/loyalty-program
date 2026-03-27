@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QR Token Test - Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <h1>QR Token Test - Mobile</h1>
+    <button onclick="testToken()">Test Current Token</button>
+    <div id="result"></div>
+
+    <script>
+        function testToken() {
+            const venueId = 'backstreet-cafe';
+            const utcHour = new Date().toISOString().slice(0, 13);
+            const token = btoa(utcHour + venueId).slice(0, 16);
+            
+            // Use IP for mobile access
+            const url = `http://192.168.1.128:3000/?action=checkin&token=${token}&venue=${venueId}`;
+            
+            document.getElementById('result').innerHTML = `
+                <h3>Test Token</h3>
+                <p><strong>UTC Hour:</strong> ${utcHour}</p>
+                <p><strong>Venue ID:</strong> ${venueId}</p>
+                <p><strong>Token:</strong> ${token}</p>
+                <p><strong>Mobile URL:</strong> <a href="${url}" target="_blank">${url}</a></p>
+                <p><strong>QR Code (scan with phone):</strong></p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}" />
+                <p><small>Make sure both devices are on the same WiFi network</small></p>
+            `;
+        }
+    </script>
+</body>
+</html>
