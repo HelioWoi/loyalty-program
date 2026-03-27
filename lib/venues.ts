@@ -66,5 +66,10 @@ export function getVenueFromHostname(hostname: string): VenueConfig {
     return venues['backstreet-cafe']
   }
   
+  // Handle menulove-rewards.netlify.app as venue domain
+  if (hostname.includes('menulove-rewards.netlify.app')) {
+    return venues['backstreet-cafe']
+  }
+  
   return venues['backstreet-cafe'] // Default to backstreet-cafe
 }

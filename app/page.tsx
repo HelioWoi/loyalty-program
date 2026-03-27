@@ -32,8 +32,7 @@ export default function Home() {
       const hostname = window.location.hostname
       
       // Check if this is the main domain (only production main domain)
-      const isMain = hostname === 'menulove.com.au' || 
-                     hostname === 'menulove-rewards.netlify.app'
+      const isMain = hostname === 'menulove.com.au'
       
       setIsMainDomain(isMain)
       if (isMain) return
