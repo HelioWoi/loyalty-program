@@ -32,7 +32,8 @@ export default function Home() {
       const hostname = window.location.hostname
       
       // Check if this is the main domain (only production main domain)
-      const isMain = hostname === 'menulove.com.au'
+      const isMain = hostname === 'menulove.com.au' || 
+                     hostname === 'menulove-rewards.netlify.app'
       
       setIsMainDomain(isMain)
       if (isMain) return
@@ -110,11 +111,10 @@ export default function Home() {
         return
       }
       
-      const now = new Date()
-      const utcHour = new Date(now.getTime() + now.getTimezoneOffset() * 60000).toISOString().slice(0, 13)
+      const utcHour = new Date().toISOString().slice(0, 13) // Already UTC
       const validToken = btoa(utcHour + venueParam).slice(0, 16)
       
-      console.log('QR validation:', { token, validToken, venueParam, utcHour })
+      console.log('QR validation:', { token, validToken, venueParam, currentHour: utcHour })
       
       if (token === validToken) {
         setQrToken(token)
