@@ -110,10 +110,11 @@ export default function Home() {
         return
       }
       
-      const currentHour = new Date().toISOString().slice(0, 13)
-      const validToken = btoa(currentHour + venueParam).slice(0, 16)
+      const now = new Date()
+      const utcHour = new Date(now.getTime() + now.getTimezoneOffset() * 60000).toISOString().slice(0, 13)
+      const validToken = btoa(utcHour + venueParam).slice(0, 16)
       
-      console.log('QR validation:', { token, validToken, venueParam, currentHour })
+      console.log('QR validation:', { token, validToken, venueParam, utcHour })
       
       if (token === validToken) {
         setQrToken(token)

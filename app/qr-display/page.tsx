@@ -72,8 +72,9 @@ export default function QRDisplayPage() {
 
           // Generate time-based token (changes every hour)
           const updateQRCode = () => {
-            const currentHour = new Date().toISOString().slice(0, 13)
-            const token = btoa(currentHour + venueData.id).slice(0, 16)
+            const now = new Date()
+            const utcHour = new Date(now.getTime() + now.getTimezoneOffset() * 60000).toISOString().slice(0, 13)
+            const token = btoa(utcHour + venueData.id).slice(0, 16)
             
             // Build URL with venue parameter for multi-tenant support
             const baseUrl = `${window.location.protocol}//${window.location.host}`

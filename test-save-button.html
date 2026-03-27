@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Save Button</title>
+</head>
+<body>
+    <h1>Testing Supabase Save Operations</h1>
+    <button onclick="testSave()">Test Save Campaign</button>
+    <div id="result"></div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script>
+        const { createClient } = supabase
+        const supabaseUrl = 'https://nuwmbaohgwuanvzotbef.supabase.co'
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51d21iYWhnd3VhbnZ6b3RiZWYiLCJwcml2YXRlIjp0cnVlfQ.3mFglKk1Jqj7qS1O3yO8yF1BtD9Q4zV2XQw6Y7k8p9o'
+
+        const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+        async function testSave() {
+            const result = document.getElementById('result')
+            result.innerHTML = 'Testing...'
+
+            try {
+                // Test campaign update
+                const campRes = await supabase
+                    .from('loyalty_campaigns')
+                    .update({
+                        campaign_name: 'Test Campaign ' + Date.now(),
+                        points_per_checkin: 5,
+                    })
+                    .eq('id', 'e8c3b5d1-2a4f-4b8e-9d6f-1c7a3b9d5e2f')
+                    .select()
+
+                console.log('Campaign result:', campRes)
+                
+                if (campRes.error) {
+                    result.innerHTML = `Campaign ERROR: ${campRes.error.message}`
+                } else {
+                    result.innerHTML = `Campaign SUCCESS: Updated ${campRes.data.length} rows`
+                }
+            } catch (err) {
+                console.error('Test error:', err)
+                result.innerHTML = `ERROR: ${err.message}`
+            }
+        }
+    </script>
+</body>
+</html>
